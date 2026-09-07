@@ -1,6 +1,6 @@
 import calendar
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone as dt_timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -72,8 +72,8 @@ def period_bounds(
             time.min,
             tzinfo=zone,
         )
-        period_start = max(midnight.astimezone(timezone.utc), start)
-        period_end = min(next_midnight.astimezone(timezone.utc), end)
+        period_start = max(midnight.astimezone(dt_timezone.utc), start)
+        period_end = min(next_midnight.astimezone(dt_timezone.utc), end)
         return period_start, period_end
 
     if scope == UsagePolicy.Scope.MONTHLY:
@@ -84,8 +84,8 @@ def period_bounds(
             months -= 1
         period_start_local = _add_months(local_start, months)
         period_end_local = _add_months(local_start, months + 1)
-        period_start = max(period_start_local.astimezone(timezone.utc), start)
-        period_end = min(period_end_local.astimezone(timezone.utc), end)
+        period_start = max(period_start_local.astimezone(dt_timezone.utc), start)
+        period_end = min(period_end_local.astimezone(dt_timezone.utc), end)
         return period_start, period_end
 
     raise ValueError(f"Unsupported usage policy scope: {scope}")
@@ -195,16 +195,12 @@ def calculate_effective_policy(
         if matched_stage.action == UsagePolicyStage.Action.BLOCK:
             result.blocked = True
         else:
-            result.download_speed_mbps = min(
-                result.download_speed_mbps,
-                matched_stage.download_speed_mbps,
-            )
-            result.upload_speed_mbps = min(
-                result.upload_speed_mbps,
-                matched_stage.upload_speed_mbps,
-            )
-            match["download_speed_mbps"] = matched_stage.download_speed_mbps
-            match["upload_speed_mbps"] = matched_stage.upload_speed_mbps
+            stage_download = matched_stage.download_speed_mbps or result.download_speed_mbps
+            stage_upload = matched_stage.upload_speed_mbps or result.upload_speed_mbps
+            result.download_speed_mbps = min(result.download_speed_mbps, stage_download)
+            result.upload_speed_mbps = min(result.upload_speed_mbps, stage_upload)
+            match["download_speed_mbps"] = stage_download
+            match["upload_speed_mbps"] = stage_upload
         result.matches.append(match)
 
     return result
