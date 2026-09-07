@@ -1,0 +1,19 @@
+rest pamirnet_rest {
+    connect_uri = "http://backend:8000"
+    connect_timeout = 2.0
+    timeout = 3.0
+
+    authorize {
+        uri = "${..connect_uri}/api/internal/radius/authorize/?username=%{urlquote:%{User-Name}}&packet_src_ip=%{Packet-Src-IP-Address}&calling_station_id=%{urlquote:%{Calling-Station-Id}}"
+        method = "post"
+        body = "json"
+        header = "X-PamirNet-Radius-Token: %{env:RADIUS_INTERNAL_TOKEN}"
+    }
+
+    post-auth {
+        uri = "${..connect_uri}/api/internal/radius/post-auth/?username=%{urlquote:%{User-Name}}&packet_src_ip=%{Packet-Src-IP-Address}&calling_station_id=%{urlquote:%{Calling-Station-Id}}"
+        method = "post"
+        body = "json"
+        header = "X-PamirNet-Radius-Token: %{env:RADIUS_INTERNAL_TOKEN}"
+    }
+}

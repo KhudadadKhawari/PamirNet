@@ -49,3 +49,17 @@ jobs:
         run: npm run lint
       - name: Build
         run: npm run build
+
+  freeradius:
+    name: FreeRADIUS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t pamirnet-freeradius ./freeradius
+      - name: Validate configuration
+        run: >-
+          docker run --rm
+          -e RADIUS_INTERNAL_TOKEN=ci-radius-token
+          pamirnet-freeradius
+          freeradius -XC
