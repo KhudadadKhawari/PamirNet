@@ -2,9 +2,11 @@
 
 PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroTik networks, built around FreeRADIUS.
 
-## Phase 0 status
+## Current status
 
-Phase 0 establishes the project foundation:
+Phase 0 foundation is complete. Phase 1 identity, tenancy and RBAC work is in progress.
+
+Phase 0 established:
 
 - architecture and domain documentation
 - Django + Django REST Framework backend scaffold
@@ -15,7 +17,7 @@ Phase 0 establishes the project foundation:
 - basic backend/frontend health integration
 - GitHub Actions CI
 
-RADIUS, MikroTik, subscriber, package, voucher and analytics functionality starts in later phases.
+Phase 1 now adds JWT authentication, tenant isolation, custom roles/permissions, platform administration, audited impersonation and append-only audit APIs. RADIUS and MikroTik integration remain Phase 2.
 
 ## Stack
 
