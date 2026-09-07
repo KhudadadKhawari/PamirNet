@@ -40,7 +40,9 @@ def _rate_limit(upload_speed_mbps: int, download_speed_mbps: int) -> str:
     return f"{upload_speed_mbps}M/{download_speed_mbps}M"
 
 
-def _subscriber_authorization(credential: SubscriberCredential) -> RadiusAuthorization:
+def _subscriber_authorization(
+    credential: SubscriberCredential,
+) -> tuple[RadiusAuthorization | None, str | None]:
     subscriber = credential.subscriber
     if subscriber.status not in {
         Subscriber.Status.ACTIVE,
@@ -63,7 +65,7 @@ def _subscriber_authorization(credential: SubscriberCredential) -> RadiusAuthori
         subscription.save(update_fields=["status", "updated_at"])
         subscriber.status = Subscriber.Status.EXPIRED
         subscriber.save(update_fields=["status", "updated_at"])
-        raise RadiusReject("Subscription expired")
+        return None, "Subscription expired"
     if not subscription.package.enabled:
         raise RadiusReject("Package disabled")
 
@@ -72,23 +74,28 @@ def _subscriber_authorization(credential: SubscriberCredential) -> RadiusAuthori
         if subscriber.status != Subscriber.Status.QUOTA_EXHAUSTED:
             subscriber.status = Subscriber.Status.QUOTA_EXHAUSTED
             subscriber.save(update_fields=["status", "updated_at"])
-        raise RadiusReject("Usage quota exhausted")
+        return None, "Usage quota exhausted"
     if subscriber.status == Subscriber.Status.QUOTA_EXHAUSTED:
         subscriber.status = Subscriber.Status.ACTIVE
         subscriber.save(update_fields=["status", "updated_at"])
 
-    return RadiusAuthorization(
-        password=credential.get_password(),
-        rate_limit=_rate_limit(
-            effective.upload_speed_mbps,
-            effective.download_speed_mbps,
+    return (
+        RadiusAuthorization(
+            password=credential.get_password(),
+            rate_limit=_rate_limit(
+                effective.upload_speed_mbps,
+                effective.download_speed_mbps,
+            ),
+            session_timeout=int((subscription.expires_at - now).total_seconds()),
+            simultaneous_sessions=subscription.package.simultaneous_sessions,
         ),
-        session_timeout=int((subscription.expires_at - now).total_seconds()),
-        simultaneous_sessions=subscription.package.simultaneous_sessions,
+        None,
     )
 
 
-def _voucher_authorization(voucher: Voucher) -> RadiusAuthorization:
+def _voucher_authorization(
+    voucher: Voucher,
+) -> tuple[RadiusAuthorization | None, str | None]:
     now = timezone.now()
     if not voucher.batch.enabled or not voucher.package.enabled:
         raise RadiusReject("Voucher package or batch disabled")
@@ -99,7 +106,7 @@ def _voucher_authorization(voucher: Voucher) -> RadiusAuthorization:
         if not voucher.expires_at or voucher.expires_at <= now:
             voucher.status = Voucher.Status.EXPIRED
             voucher.save(update_fields=["status", "updated_at"])
-            raise RadiusReject("Voucher expired")
+            return None, "Voucher expired"
         effective = calculate_voucher_effective_policy(voucher, at=now)
         if effective.blocked:
             permanently_consumed = any(
@@ -110,7 +117,7 @@ def _voucher_authorization(voucher: Voucher) -> RadiusAuthorization:
             if permanently_consumed:
                 voucher.status = Voucher.Status.CONSUMED
                 voucher.save(update_fields=["status", "updated_at"])
-            raise RadiusReject("Voucher usage quota exhausted")
+            return None, "Voucher usage quota exhausted"
         expires_at = voucher.expires_at
     else:
         effective = calculate_voucher_effective_policy(voucher, at=now)
@@ -120,14 +127,17 @@ def _voucher_authorization(voucher: Voucher) -> RadiusAuthorization:
             voucher.package.duration_unit,
         )
 
-    return RadiusAuthorization(
-        password=voucher.get_password(),
-        rate_limit=_rate_limit(
-            effective.upload_speed_mbps,
-            effective.download_speed_mbps,
+    return (
+        RadiusAuthorization(
+            password=voucher.get_password(),
+            rate_limit=_rate_limit(
+                effective.upload_speed_mbps,
+                effective.download_speed_mbps,
+            ),
+            session_timeout=max(1, int((expires_at - now).total_seconds())),
+            simultaneous_sessions=voucher.batch.simultaneous_sessions,
         ),
-        session_timeout=max(1, int((expires_at - now).total_seconds())),
-        simultaneous_sessions=voucher.batch.simultaneous_sessions,
+        None,
     )
 
 
@@ -137,6 +147,9 @@ def authorize_radius(
     username: str,
     calling_station_id: str = "",
 ) -> RadiusAuthorization:
+    rejection_reason = None
+    authorization = None
+
     with transaction.atomic():
         router = _router_for_source(packet_src_ip)
         credential = (
@@ -146,34 +159,41 @@ def authorize_radius(
             .first()
         )
         if credential:
-            authorization = _subscriber_authorization(credential)
-            subscriber = credential.subscriber
-            station = ""
-            if calling_station_id:
-                try:
-                    station = normalize_mac(calling_station_id)
-                except Exception as exc:
-                    raise RadiusReject("Invalid station MAC") from exc
-            if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
-                if not station or station != subscriber.mac_address:
+            authorization, rejection_reason = _subscriber_authorization(credential)
+            if authorization:
+                subscriber = credential.subscriber
+                station = ""
+                if calling_station_id:
+                    try:
+                        station = normalize_mac(calling_station_id)
+                    except Exception as exc:
+                        raise RadiusReject("Invalid station MAC") from exc
+                if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
+                    if not station or station != subscriber.mac_address:
+                        raise RadiusReject("MAC mismatch")
+                if (
+                    subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
+                    and subscriber.mac_address
+                    and station != subscriber.mac_address
+                ):
                     raise RadiusReject("MAC mismatch")
-            if (
-                subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
-                and subscriber.mac_address
-                and station != subscriber.mac_address
-            ):
-                raise RadiusReject("MAC mismatch")
-            return authorization
+        else:
+            voucher = (
+                Voucher.objects.select_related("batch", "package")
+                .select_for_update()
+                .filter(tenant=router.tenant, username=username)
+                .first()
+            )
+            if voucher:
+                authorization, rejection_reason = _voucher_authorization(voucher)
+            else:
+                raise RadiusReject("Unknown RADIUS identity")
 
-        voucher = (
-            Voucher.objects.select_related("batch", "package")
-            .select_for_update()
-            .filter(tenant=router.tenant, username=username)
-            .first()
-        )
-        if voucher:
-            return _voucher_authorization(voucher)
-        raise RadiusReject("Unknown RADIUS identity")
+    if rejection_reason:
+        raise RadiusReject(rejection_reason)
+    if authorization is None:  # pragma: no cover - defensive
+        raise RadiusReject("Unable to authorize RADIUS identity")
+    return authorization
 
 
 def freeradius_success_payload(authorization: RadiusAuthorization) -> dict:
