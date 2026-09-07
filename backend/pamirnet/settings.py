@@ -130,6 +130,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "subscribers.expire_due_subscriptions",
         "schedule": 60.0,
     },
+    "expire-vouchers-every-minute": {
+        "task": "vouchers.expire_due_vouchers",
+        "schedule": 60.0,
+    },
 }
 
 PAMIRNET_ENCRYPTION_KEY = os.getenv("PAMIRNET_ENCRYPTION_KEY", "")
