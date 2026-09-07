@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Router
+from .models import Router, RouterHealthSample
 
 
 @admin.register(Router)
@@ -29,4 +29,28 @@ class RouterAdmin(admin.ModelAdmin):
         "uptime_seconds",
         "created_at",
         "updated_at",
+    )
+
+
+@admin.register(RouterHealthSample)
+class RouterHealthSampleAdmin(admin.ModelAdmin):
+    list_display = (
+        "router",
+        "tenant",
+        "sampled_at",
+        "status",
+        "latency_ms",
+        "packet_loss_percent",
+        "uptime_seconds",
+    )
+    list_filter = ("status", "tenant", "router")
+    search_fields = ("router__name", "tenant__name")
+    readonly_fields = (
+        "tenant",
+        "router",
+        "sampled_at",
+        "status",
+        "latency_ms",
+        "packet_loss_percent",
+        "uptime_seconds",
     )
