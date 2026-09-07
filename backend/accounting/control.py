@@ -1,8 +1,11 @@
 import subprocess
 
+from django.db import models
 from django.utils import timezone
 
+from subscribers.models import Subscriber, UsagePolicy, UsagePolicyStage
 from subscribers.policy import calculate_effective_policy
+from vouchers.models import Voucher
 from vouchers.policy import calculate_voucher_effective_policy
 
 from .models import RadiusSession
@@ -73,7 +76,12 @@ def _record_control(
     session.last_control_action = action
     session.last_control_at = timezone.now()
     session.last_control_error = error[:2000]
-    fields = ["last_control_action", "last_control_at", "last_control_error", "updated_at"]
+    fields = [
+        "last_control_action",
+        "last_control_at",
+        "last_control_error",
+        "updated_at",
+    ]
     if rate_limit is not None:
         session.last_rate_limit = rate_limit
         fields.append("last_rate_limit")
@@ -113,6 +121,32 @@ def _effective_policy(session: RadiusSession):
     return None
 
 
+def _sync_identity_state(session: RadiusSession, policy):
+    if session.subscriber_id and session.subscriber:
+        subscriber = session.subscriber
+        desired = (
+            Subscriber.Status.QUOTA_EXHAUSTED
+            if policy.blocked
+            else Subscriber.Status.ACTIVE
+        )
+        if subscriber.status in {
+            Subscriber.Status.ACTIVE,
+            Subscriber.Status.QUOTA_EXHAUSTED,
+        } and subscriber.status != desired:
+            subscriber.status = desired
+            subscriber.save(update_fields=["status", "updated_at"])
+
+    if session.voucher_id and session.voucher and policy.blocked:
+        permanently_consumed = any(
+            match.get("scope") == UsagePolicy.Scope.SUBSCRIPTION
+            and match.get("action") == UsagePolicyStage.Action.BLOCK
+            for match in policy.matches
+        )
+        if permanently_consumed and session.voucher.status == Voucher.Status.ACTIVE:
+            session.voucher.status = Voucher.Status.CONSUMED
+            session.voucher.save(update_fields=["status", "updated_at"])
+
+
 def refresh_session_policy(session_id) -> dict:
     session = (
         RadiusSession.objects.select_related(
@@ -129,6 +163,8 @@ def refresh_session_policy(session_id) -> dict:
     policy = _effective_policy(session)
     if not policy:
         return {"action": "none", "reason": "identity_not_resolved"}
+
+    _sync_identity_state(session, policy)
     if policy.blocked:
         try:
             send_disconnect(session)
@@ -143,8 +179,8 @@ def refresh_session_policy(session_id) -> dict:
         send_coa(session, rate_limit=rate_limit)
         return {"action": "coa", "rate_limit": rate_limit}
     except RadiusControlError as coa_error:
-        # MikroTik versions/configurations vary in how they apply rate changes.
-        # If CoA fails, force a re-authentication so the new RADIUS policy applies.
+        # RouterOS deployments vary in how they apply rate updates. Falling
+        # back to Disconnect forces a clean re-authentication with the new policy.
         try:
             send_disconnect(session)
             return {
@@ -191,7 +227,3 @@ def refresh_package_sessions(package) -> int:
         if result.get("action") in {"coa", "disconnect"}:
             refreshed += 1
     return refreshed
-
-
-# Imported at the end to keep the public control functions easy to mock in tests.
-from django.db import models  # noqa: E402
