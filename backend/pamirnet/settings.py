@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "networking",
     "subscribers",
     "vouchers",
+    "accounting",
 ]
 
 MIDDLEWARE = [
@@ -106,7 +107,7 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "PamirNet API",
     "DESCRIPTION": "PamirNet ISP subscriber management and AAA API",
-    "VERSION": "0.5.0",
+    "VERSION": "0.6.0",
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -134,6 +135,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "vouchers.expire_due_vouchers",
         "schedule": 60.0,
     },
+    "cleanup-accounting-data-daily": {
+        "task": "accounting.cleanup_old_data",
+        "schedule": 86400.0,
+    },
 }
 
 PAMIRNET_ENCRYPTION_KEY = os.getenv("PAMIRNET_ENCRYPTION_KEY", "")
@@ -145,3 +150,5 @@ WIREGUARD_PORT = int(os.getenv("WIREGUARD_PORT", "51820"))
 WIREGUARD_INTERFACE = os.getenv("WIREGUARD_INTERFACE", "wg0")
 RADIUS_CLIENTS_FILE = os.getenv("RADIUS_CLIENTS_FILE", "/tmp/pamirnet-radius-clients.conf")
 RADIUS_INTERNAL_TOKEN = os.getenv("RADIUS_INTERNAL_TOKEN", "dev-radius-internal-token")
+ACCOUNTING_RAW_RETENTION_DAYS = int(os.getenv("ACCOUNTING_RAW_RETENTION_DAYS", "365"))
+ROUTER_HEALTH_RETENTION_DAYS = int(os.getenv("ROUTER_HEALTH_RETENTION_DAYS", "30"))
