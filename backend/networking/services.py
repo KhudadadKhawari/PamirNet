@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .mikrotik import MikroTikClient, MikroTikError
-from .models import Router
+from .models import Router, RouterHealthSample
 from .wireguard import allocate_tunnel_ip, build_provisioning, generate_keypair
 
 
@@ -123,10 +123,25 @@ def parse_uptime_seconds(value) -> int | None:
     return total or None
 
 
+def _record_health_sample(router: Router):
+    RouterHealthSample.objects.create(
+        tenant=router.tenant,
+        router=router,
+        status=router.status,
+        latency_ms=router.latency_ms,
+        packet_loss_percent=router.packet_loss_percent,
+        uptime_seconds=router.uptime_seconds,
+    )
+
+
 def check_router_health(router: Router, attempts: int = 3) -> dict:
     if not router.enabled:
         router.status = Router.Status.DISABLED
-        router.save(update_fields=["status", "updated_at"])
+        router.packet_loss_percent = 100.0
+        router.save(
+            update_fields=["status", "packet_loss_percent", "updated_at"]
+        )
+        _record_health_sample(router)
         return {"status": router.status, "packet_loss_percent": 100.0}
 
     latencies = []
@@ -162,6 +177,7 @@ def check_router_health(router: Router, attempts: int = 3) -> dict:
             "updated_at",
         ]
     )
+    _record_health_sample(router)
     return {
         "status": router.status,
         "latency_ms": router.latency_ms,
