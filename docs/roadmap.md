@@ -32,21 +32,22 @@ Status: complete
 
 - router/NAS registration
 - WireGuard onboarding/config generation
-- FreeRADIUS service and REST integration
+- central FreeRADIUS service
 - MikroTik RouterOS API/REST integration
-- Hotspot and PPPoE authentication foundation
+- router health foundation
 
 ## Phase 3 — Subscribers and subscriptions
 
 Status: complete
 
+- package foundation
 - subscriber CRUD/search/filter
 - manual/generated credentials
 - MAC locking / first-login binding
 - subscription lifecycle
 - renewals and expiry
 - immediate package changes
-- base package speed/duration/price configuration
+- tenant-aware FreeRADIUS authorization
 
 ## Phase 4 — Packages and policy engine
 
@@ -60,29 +61,32 @@ Status: complete
 - multi-stage FUP
 - effective-policy calculation
 - RADIUS throttle/block enforcement
-- package FUP/quota management UI
 
 ## Phase 5 — Vouchers
 
+Status: complete
+
 - voucher batches
-- numeric credentials
+- 8-digit numeric usernames / 6-digit numeric passwords
 - first-login activation
-- simultaneous-session rules
-- quota/expiry enforcement
+- simultaneous-session rules including unlimited
+- quota/FUP and expiry enforcement
 - CSV export
-- bulk disable
+- bulk disable and safe unused-batch deletion
 
 ## Phase 6 — Accounting and analytics
 
 - RADIUS Start/Interim/Stop ingestion
+- online session state
+- CoA/disconnect and immediate policy changes
+- subscriber/voucher usage counter updates
 - raw session retention
 - hourly/daily aggregates
 - tenant dashboard
 - per subscriber/voucher usage
 - custom-range analytics
 - sorting/filtering
-- router latency/uptime/packet loss
-- CoA/disconnect and live-session controls
+- router latency/uptime/packet loss expansion
 
 ## Phase 7 — Production hardening and AWKH rollout
 
