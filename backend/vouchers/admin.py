@@ -12,7 +12,15 @@ class VoucherBatchAdmin(admin.ModelAdmin):
 
 @admin.register(Voucher)
 class VoucherAdmin(admin.ModelAdmin):
-    list_display = ("username", "tenant", "batch", "package", "status", "activated_at", "expires_at")
+    list_display = (
+        "username",
+        "tenant",
+        "batch",
+        "package",
+        "status",
+        "activated_at",
+        "expires_at",
+    )
     list_filter = ("status", "tenant")
     search_fields = ("username", "batch__name", "package__name")
     exclude = ("password_cipher",)
