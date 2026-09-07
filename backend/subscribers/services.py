@@ -9,7 +9,6 @@ from django.utils import timezone
 
 from .models import Package, Subscriber, SubscriberCredential, Subscription
 
-
 USERNAME_DIGITS = 8
 PASSWORD_LENGTH = 12
 
