@@ -1,11 +1,66 @@
+from django.db import transaction
 from rest_framework import serializers
 
-from .models import Package, Subscriber, Subscription
+from .models import (
+    Package,
+    Subscriber,
+    Subscription,
+    UsagePolicy,
+    UsagePolicyStage,
+)
 from .services import normalize_mac
+
+
+class UsagePolicyStageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UsagePolicyStage
+        fields = [
+            "id",
+            "threshold_gb",
+            "action",
+            "download_speed_mbps",
+            "upload_speed_mbps",
+        ]
+        read_only_fields = ["id"]
+
+    def validate_threshold_gb(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Threshold must be greater than 0 GB.")
+        return value
+
+    def validate(self, attrs):
+        action = attrs.get("action")
+        download = attrs.get("download_speed_mbps")
+        upload = attrs.get("upload_speed_mbps")
+        if action == UsagePolicyStage.Action.THROTTLE:
+            if not download or not upload:
+                raise serializers.ValidationError(
+                    "Throttle stages require both download and upload speeds."
+                )
+        elif action == UsagePolicyStage.Action.BLOCK:
+            attrs["download_speed_mbps"] = None
+            attrs["upload_speed_mbps"] = None
+        return attrs
+
+
+class UsagePolicySerializer(serializers.ModelSerializer):
+    stages = UsagePolicyStageSerializer(many=True, allow_empty=False)
+
+    class Meta:
+        model = UsagePolicy
+        fields = ["id", "scope", "enabled", "stages"]
+        read_only_fields = ["id"]
+
+    def validate_stages(self, stages):
+        thresholds = [stage["threshold_gb"] for stage in stages]
+        if len(thresholds) != len(set(thresholds)):
+            raise serializers.ValidationError("Stage thresholds must be unique.")
+        return stages
 
 
 class PackageSerializer(serializers.ModelSerializer):
     currency = serializers.SerializerMethodField()
+    usage_policies = UsagePolicySerializer(many=True, required=False)
 
     class Meta:
         model = Package
@@ -21,6 +76,7 @@ class PackageSerializer(serializers.ModelSerializer):
             "currency",
             "simultaneous_sessions",
             "enabled",
+            "usage_policies",
             "created_at",
             "updated_at",
         ]
@@ -48,6 +104,66 @@ class PackageSerializer(serializers.ModelSerializer):
         if value < 1:
             raise serializers.ValidationError("At least one simultaneous session is required.")
         return value
+
+    def validate(self, attrs):
+        policies = attrs.get("usage_policies")
+        if policies is None:
+            return attrs
+        scopes = [policy["scope"] for policy in policies]
+        if len(scopes) != len(set(scopes)):
+            raise serializers.ValidationError(
+                {"usage_policies": "Only one policy per usage scope is allowed."}
+            )
+        download = attrs.get(
+            "download_speed_mbps",
+            getattr(self.instance, "download_speed_mbps", None),
+        )
+        upload = attrs.get(
+            "upload_speed_mbps",
+            getattr(self.instance, "upload_speed_mbps", None),
+        )
+        for policy in policies:
+            for stage in policy["stages"]:
+                if stage["action"] != UsagePolicyStage.Action.THROTTLE:
+                    continue
+                if download and stage["download_speed_mbps"] > download:
+                    raise serializers.ValidationError(
+                        {"usage_policies": "FUP download speed cannot exceed package speed."}
+                    )
+                if upload and stage["upload_speed_mbps"] > upload:
+                    raise serializers.ValidationError(
+                        {"usage_policies": "FUP upload speed cannot exceed package speed."}
+                    )
+        return attrs
+
+    @staticmethod
+    def _replace_usage_policies(package, policies):
+        package.usage_policies.all().delete()
+        for policy_data in policies:
+            stages = policy_data.pop("stages")
+            policy = UsagePolicy.objects.create(
+                tenant=package.tenant,
+                package=package,
+                **policy_data,
+            )
+            UsagePolicyStage.objects.bulk_create(
+                [UsagePolicyStage(policy=policy, **stage) for stage in stages]
+            )
+
+    @transaction.atomic
+    def create(self, validated_data):
+        policies = validated_data.pop("usage_policies", [])
+        package = super().create(validated_data)
+        self._replace_usage_policies(package, policies)
+        return package
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        policies = validated_data.pop("usage_policies", None)
+        package = super().update(instance, validated_data)
+        if policies is not None:
+            self._replace_usage_policies(package, policies)
+        return package
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
