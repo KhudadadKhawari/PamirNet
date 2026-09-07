@@ -25,7 +25,11 @@ class Router(models.Model):
     tunnel_ip = models.GenericIPAddressField(protocol="IPv4", unique=True)
     wireguard_public_key = models.CharField(max_length=64, unique=True)
 
-    api_protocol = models.CharField(max_length=16, choices=APIProtocol.choices, default=APIProtocol.API)
+    api_protocol = models.CharField(
+        max_length=16,
+        choices=APIProtocol.choices,
+        default=APIProtocol.API,
+    )
     api_port = models.PositiveIntegerField(default=8728)
     api_username = models.CharField(max_length=120)
     api_password_cipher = models.TextField()
@@ -33,7 +37,11 @@ class Router(models.Model):
     radius_secret_cipher = models.TextField()
 
     enabled = models.BooleanField(default=True)
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
     routeros_version = models.CharField(max_length=80, blank=True)
     last_seen_at = models.DateTimeField(blank=True, null=True)
     latency_ms = models.FloatField(blank=True, null=True)
@@ -46,7 +54,10 @@ class Router(models.Model):
     class Meta:
         ordering = ["name"]
         constraints = [
-            models.UniqueConstraint(fields=["tenant", "name"], name="unique_router_name_per_tenant"),
+            models.UniqueConstraint(
+                fields=["tenant", "name"],
+                name="unique_router_name_per_tenant",
+            ),
         ]
         indexes = [
             models.Index(fields=["tenant", "enabled"]),

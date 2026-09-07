@@ -24,10 +24,12 @@ class PhaseTwoRouterTests(TestCase):
     def setUp(self):
         self.radius_file = tempfile.NamedTemporaryFile(delete=False)
         self.radius_file.close()
-        self.settings_override = override_settings(RADIUS_CLIENTS_FILE=self.radius_file.name)
+        self.settings_override = override_settings(
+            RADIUS_CLIENTS_FILE=self.radius_file.name
+        )
         self.settings_override.enable()
         self.addCleanup(self.settings_override.disable)
-        self.addCleanup(lambda: os.path.exists(self.radius_file.name) and os.unlink(self.radius_file.name))
+        self.addCleanup(self._remove_radius_file)
 
         self.client = APIClient()
         self.tenant, _, _ = create_tenant_with_owner(
@@ -44,7 +46,13 @@ class PhaseTwoRouterTests(TestCase):
             {"email": "owner@awkh.test", "password": "StrongPassword-123!"},
             format="json",
         )
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {response.data['access']}"
+        )
+
+    def _remove_radius_file(self):
+        if os.path.exists(self.radius_file.name):
+            os.unlink(self.radius_file.name)
 
     def create_router(self, name="Core Router"):
         return self.client.post(
@@ -108,8 +116,13 @@ class PhaseTwoRouterTests(TestCase):
     def test_connectivity_action_updates_health(self, client_class):
         response = self.create_router()
         router_id = response.data["router"]["id"]
-        client_class.return_value.resource.return_value = {"version": "7.20", "uptime": "1d2h3m4s"}
-        result = self.client.post(f"/api/network/routers/{router_id}/test-connectivity/")
+        client_class.return_value.resource.return_value = {
+            "version": "7.20",
+            "uptime": "1d2h3m4s",
+        }
+        result = self.client.post(
+            f"/api/network/routers/{router_id}/test-connectivity/"
+        )
         self.assertEqual(result.status_code, 200, result.data)
         self.assertEqual(result.data["status"], "online")
         self.assertEqual(result.data["routeros_version"], "7.20")

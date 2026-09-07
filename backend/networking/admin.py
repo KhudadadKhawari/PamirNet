@@ -5,7 +5,15 @@ from .models import Router
 
 @admin.register(Router)
 class RouterAdmin(admin.ModelAdmin):
-    list_display = ("name", "tenant", "tunnel_ip", "api_protocol", "status", "enabled", "last_seen_at")
+    list_display = (
+        "name",
+        "tenant",
+        "tunnel_ip",
+        "api_protocol",
+        "status",
+        "enabled",
+        "last_seen_at",
+    )
     list_filter = ("status", "enabled", "api_protocol", "tenant")
     search_fields = ("name", "tenant__name", "tunnel_ip")
     readonly_fields = (

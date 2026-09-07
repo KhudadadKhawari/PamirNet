@@ -8,4 +8,5 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         content = render_radius_clients()
-        self.stdout.write(self.style.SUCCESS(f"Rendered FreeRADIUS clients ({len(content)} bytes)."))
+        message = f"Rendered FreeRADIUS clients ({len(content)} bytes)."
+        self.stdout.write(self.style.SUCCESS(message))

@@ -46,7 +46,12 @@ def _decode_length(sock) -> int:
         return ((first & 0x1F) << 16) | (rest[0] << 8) | rest[1]
     if first < 0xF0:
         rest = _read_exact(sock, 3)
-        return ((first & 0x0F) << 24) | (rest[0] << 16) | (rest[1] << 8) | rest[2]
+        return (
+            ((first & 0x0F) << 24)
+            | (rest[0] << 16)
+            | (rest[1] << 8)
+            | rest[2]
+        )
     if first == 0xF0:
         return struct.unpack(">I", _read_exact(sock, 4))[0]
     raise MikroTikError("Invalid RouterOS API word length.")
@@ -86,11 +91,14 @@ class MikroTikClient:
     def resource(self) -> dict:
         if self.router.api_protocol == self.router.APIProtocol.REST:
             return self._rest_resource()
-        return self._api_resource(ssl_enabled=self.router.api_protocol == self.router.APIProtocol.API_SSL)
+        ssl_enabled = self.router.api_protocol == self.router.APIProtocol.API_SSL
+        return self._api_resource(ssl_enabled=ssl_enabled)
 
     def _rest_resource(self) -> dict:
-        scheme = "https"
-        url = f"{scheme}://{self.router.tunnel_ip}:{self.router.api_port}/rest/system/resource"
+        url = (
+            f"https://{self.router.tunnel_ip}:{self.router.api_port}"
+            "/rest/system/resource"
+        )
         credentials = f"{self.router.api_username}:{self.router.get_api_password()}".encode()
         request = urllib.request.Request(
             url,
@@ -104,7 +112,11 @@ class MikroTikClient:
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout, context=context) as response:
+            with urllib.request.urlopen(
+                request,
+                timeout=self.timeout,
+                context=context,
+            ) as response:
                 payload = json.loads(response.read().decode())
         except (urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise MikroTikError(f"RouterOS REST request failed: {exc}") from exc
@@ -113,7 +125,8 @@ class MikroTikClient:
         return payload
 
     def _api_resource(self, *, ssl_enabled: bool) -> dict:
-        raw_sock = socket.create_connection((self.router.tunnel_ip, self.router.api_port), timeout=self.timeout)
+        address = (self.router.tunnel_ip, self.router.api_port)
+        raw_sock = socket.create_connection(address, timeout=self.timeout)
         sock = raw_sock
         try:
             if ssl_enabled:
@@ -146,8 +159,14 @@ class MikroTikClient:
             return
         challenge = attrs.get("ret")
         if challenge:
-            digest = hashlib.md5(b"\x00" + password.encode() + bytes.fromhex(challenge)).hexdigest()
-            _write_sentence(sock, ["/login", f"=name={username}", f"=response=00{digest}"])
+            challenge_bytes = bytes.fromhex(challenge)
+            digest = hashlib.md5(
+                b"\x00" + password.encode() + challenge_bytes
+            ).hexdigest()
+            _write_sentence(
+                sock,
+                ["/login", f"=name={username}", f"=response=00{digest}"],
+            )
             sentence = _read_sentence(sock)
             if sentence and sentence[0] == "!done":
                 return

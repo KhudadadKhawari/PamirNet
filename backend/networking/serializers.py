@@ -32,8 +32,16 @@ class RouterSerializer(serializers.ModelSerializer):
 class RouterCreateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120)
     description = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    api_protocol = serializers.ChoiceField(choices=Router.APIProtocol.choices, default=Router.APIProtocol.API)
-    api_port = serializers.IntegerField(min_value=1, max_value=65535, required=False, allow_null=True)
+    api_protocol = serializers.ChoiceField(
+        choices=Router.APIProtocol.choices,
+        default=Router.APIProtocol.API,
+    )
+    api_port = serializers.IntegerField(
+        min_value=1,
+        max_value=65535,
+        required=False,
+        allow_null=True,
+    )
     api_username = serializers.CharField(max_length=120)
     api_password = serializers.CharField(write_only=True, trim_whitespace=False)
     api_tls_verify = serializers.BooleanField(required=False, default=False)
@@ -42,9 +50,20 @@ class RouterCreateSerializer(serializers.Serializer):
 class RouterUpdateSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=120, required=False)
     description = serializers.CharField(max_length=255, required=False, allow_blank=True)
-    api_protocol = serializers.ChoiceField(choices=Router.APIProtocol.choices, required=False)
-    api_port = serializers.IntegerField(min_value=1, max_value=65535, required=False)
+    api_protocol = serializers.ChoiceField(
+        choices=Router.APIProtocol.choices,
+        required=False,
+    )
+    api_port = serializers.IntegerField(
+        min_value=1,
+        max_value=65535,
+        required=False,
+    )
     api_username = serializers.CharField(max_length=120, required=False)
-    api_password = serializers.CharField(write_only=True, required=False, trim_whitespace=False)
+    api_password = serializers.CharField(
+        write_only=True,
+        required=False,
+        trim_whitespace=False,
+    )
     api_tls_verify = serializers.BooleanField(required=False)
     enabled = serializers.BooleanField(required=False)

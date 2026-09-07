@@ -11,7 +11,9 @@ def _key() -> bytes:
         try:
             raw = base64.urlsafe_b64decode(configured.encode())
         except Exception as exc:  # pragma: no cover - defensive config validation
-            raise ValueError("PAMIRNET_ENCRYPTION_KEY must be a Fernet-compatible base64 key.") from exc
+            raise ValueError(
+                "PAMIRNET_ENCRYPTION_KEY must be a Fernet-compatible base64 key."
+            ) from exc
         if len(raw) != 32:
             raise ValueError("PAMIRNET_ENCRYPTION_KEY must decode to exactly 32 bytes.")
         return configured.encode()
@@ -33,4 +35,6 @@ def decrypt_secret(value: str) -> str:
     try:
         return Fernet(_key()).decrypt(value.encode()).decode()
     except InvalidToken as exc:
-        raise ValueError("Unable to decrypt stored secret with the configured PamirNet key.") from exc
+        raise ValueError(
+            "Unable to decrypt stored secret with the configured PamirNet key."
+        ) from exc

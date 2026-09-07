@@ -46,11 +46,17 @@ class RouterViewSet(viewsets.ModelViewSet):
         serializer = RouterCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            router, provisioning = provision_router(tenant=tenant, data=serializer.validated_data)
+            router, provisioning = provision_router(
+                tenant=tenant,
+                data=serializer.validated_data,
+            )
         except WireGuardConfigurationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         except IntegrityError:
-            return Response({"detail": "A router with this name already exists."}, status=status.HTTP_409_CONFLICT)
+            return Response(
+                {"detail": "A router with this name already exists."},
+                status=status.HTTP_409_CONFLICT,
+            )
         audit(
             request,
             "router.created",
@@ -59,7 +65,10 @@ class RouterViewSet(viewsets.ModelViewSet):
             after=RouterSerializer(router).data,
         )
         return Response(
-            {"router": RouterSerializer(router).data, "provisioning": provisioning},
+            {
+                "router": RouterSerializer(router).data,
+                "provisioning": provisioning,
+            },
             status=status.HTTP_201_CREATED,
         )
 
@@ -76,7 +85,9 @@ class RouterViewSet(viewsets.ModelViewSet):
         if password is not None:
             router.set_api_password(password)
         if "enabled" in values:
-            router.status = Router.Status.PENDING if router.enabled else Router.Status.DISABLED
+            router.status = (
+                Router.Status.PENDING if router.enabled else Router.Status.DISABLED
+            )
         router.save()
         render_radius_clients()
         audit(
@@ -109,24 +120,38 @@ class RouterViewSet(viewsets.ModelViewSet):
     def test_connectivity(self, request, pk=None):
         router = self.get_object()
         result = check_router_health(router)
+        metadata_result = {
+            key: str(value) if value is not None else None
+            for key, value in result.items()
+        }
         audit(
             request,
             "router.connectivity_tested",
             tenant=router.tenant,
             target=router,
-            metadata={"result": {key: str(value) if value is not None else None for key, value in result.items()}},
+            metadata={"result": metadata_result},
         )
-        return Response(RouterSerializer(router).data | {"test_error": result.get("error", "")})
+        payload = RouterSerializer(router).data | {
+            "test_error": result.get("error", "")
+        }
+        return Response(payload)
 
     @action(detail=True, methods=["post"], url_path="rotate-radius-secret")
     def rotate_radius(self, request, pk=None):
         router = self.get_object()
         secret = rotate_radius_secret(router)
-        audit(request, "router.radius_secret_rotated", tenant=router.tenant, target=router)
+        audit(
+            request,
+            "router.radius_secret_rotated",
+            tenant=router.tenant,
+            target=router,
+        )
         return Response(
             {
                 "radius_secret": secret,
-                "routeros_command": f'/radius set [find comment="PamirNet"] secret="{secret}"',
+                "routeros_command": (
+                    f'/radius set [find comment="PamirNet"] secret="{secret}"'
+                ),
                 "notice": "The new RADIUS secret is returned only in this response.",
             }
         )
@@ -138,5 +163,15 @@ class RouterViewSet(viewsets.ModelViewSet):
             provisioning = rotate_wireguard(router)
         except WireGuardConfigurationError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
-        audit(request, "router.wireguard_rotated", tenant=router.tenant, target=router)
-        return Response({"router": RouterSerializer(router).data, "provisioning": provisioning})
+        audit(
+            request,
+            "router.wireguard_rotated",
+            tenant=router.tenant,
+            target=router,
+        )
+        return Response(
+            {
+                "router": RouterSerializer(router).data,
+                "provisioning": provisioning,
+            }
+        )
