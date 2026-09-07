@@ -1,6 +1,6 @@
 import calendar
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta, timezone as dt_timezone
+from datetime import UTC, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -72,8 +72,8 @@ def period_bounds(
             time.min,
             tzinfo=zone,
         )
-        period_start = max(midnight.astimezone(dt_timezone.utc), start)
-        period_end = min(next_midnight.astimezone(dt_timezone.utc), end)
+        period_start = max(midnight.astimezone(UTC), start)
+        period_end = min(next_midnight.astimezone(UTC), end)
         return period_start, period_end
 
     if scope == UsagePolicy.Scope.MONTHLY:
@@ -84,8 +84,8 @@ def period_bounds(
             months -= 1
         period_start_local = _add_months(local_start, months)
         period_end_local = _add_months(local_start, months + 1)
-        period_start = max(period_start_local.astimezone(dt_timezone.utc), start)
-        period_end = min(period_end_local.astimezone(dt_timezone.utc), end)
+        period_start = max(period_start_local.astimezone(UTC), start)
+        period_end = min(period_end_local.astimezone(UTC), end)
         return period_start, period_end
 
     raise ValueError(f"Unsupported usage policy scope: {scope}")
