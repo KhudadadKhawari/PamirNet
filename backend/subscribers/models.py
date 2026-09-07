@@ -2,8 +2,8 @@ import uuid
 
 from django.db import models
 
-from core.models import Tenant
 from core.crypto import decrypt_secret, encrypt_secret
+from core.models import Tenant
 
 
 class Package(models.Model):
