@@ -17,6 +17,7 @@ from core.permissions import TenantScopedPermission
 from core.services import audit
 
 from .models import Package, Subscriber
+from .policy import calculate_effective_policy, effective_policy_payload
 from .radius import (
     RadiusReject,
     authorize_radius,
@@ -34,6 +35,7 @@ from .serializers import (
     SubscriberUpdateSerializer,
 )
 from .services import (
+    active_subscription,
     assign_package,
     change_password,
     create_subscriber,
@@ -64,7 +66,7 @@ class PackageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         tenant = resolve_tenant_context(self.request)
-        return Package.objects.filter(tenant=tenant)
+        return Package.objects.filter(tenant=tenant).prefetch_related("usage_policies__stages")
 
     def perform_create(self, serializer):
         tenant = resolve_tenant_context(self.request)
@@ -191,6 +193,30 @@ class SubscriberViewSet(viewsets.GenericViewSet):
             after=SubscriberSerializer(subscriber).data,
         )
         return Response(SubscriberSerializer(subscriber).data)
+
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="effective-policy",
+        required_permissions={"GET": "subscriber.view"},
+    )
+    def effective_policy(self, request, pk=None):
+        subscriber = self.get_object()
+        subscription = active_subscription(subscriber)
+        if not subscription:
+            return Response(
+                {"detail": "Subscriber has no active subscription."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        policy = calculate_effective_policy(subscription)
+        return Response(
+            {
+                "subscriber_id": str(subscriber.id),
+                "subscription_id": str(subscription.id),
+                "package_id": str(subscription.package_id),
+                **effective_policy_payload(policy),
+            }
+        )
 
     @action(
         detail=True,
