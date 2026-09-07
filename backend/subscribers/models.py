@@ -44,6 +44,70 @@ class Package(models.Model):
         return f"{self.tenant.name}: {self.name}"
 
 
+class UsagePolicy(models.Model):
+    class Scope(models.TextChoices):
+        DAILY = "daily", "Daily"
+        WEEKLY = "weekly", "Weekly"
+        MONTHLY = "monthly", "Monthly"
+        SUBSCRIPTION = "subscription", "Subscription period"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="usage_policies")
+    package = models.ForeignKey(
+        Package,
+        on_delete=models.CASCADE,
+        related_name="usage_policies",
+    )
+    scope = models.CharField(max_length=16, choices=Scope.choices)
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["scope"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["package", "scope"],
+                name="unique_usage_policy_scope_per_package",
+            )
+        ]
+        indexes = [models.Index(fields=["tenant", "scope", "enabled"])]
+
+    def __str__(self):
+        return f"{self.package.name}: {self.scope}"
+
+
+class UsagePolicyStage(models.Model):
+    class Action(models.TextChoices):
+        THROTTLE = "throttle", "Throttle"
+        BLOCK = "block", "Block"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    policy = models.ForeignKey(
+        UsagePolicy,
+        on_delete=models.CASCADE,
+        related_name="stages",
+    )
+    threshold_gb = models.DecimalField(max_digits=12, decimal_places=3)
+    action = models.CharField(max_length=16, choices=Action.choices)
+    download_speed_mbps = models.PositiveIntegerField(blank=True, null=True)
+    upload_speed_mbps = models.PositiveIntegerField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["threshold_gb"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["policy", "threshold_gb"],
+                name="unique_usage_stage_threshold_per_policy",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.policy}: {self.threshold_gb} GB {self.action}"
+
+
 class Subscriber(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -174,3 +238,39 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.subscriber.name}: {self.package.name}"
+
+
+class SubscriptionUsageCounter(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="subscription_usage_counters",
+    )
+    subscription = models.ForeignKey(
+        Subscription,
+        on_delete=models.CASCADE,
+        related_name="usage_counters",
+    )
+    scope = models.CharField(max_length=16, choices=UsagePolicy.Scope.choices)
+    period_start = models.DateTimeField()
+    period_end = models.DateTimeField()
+    bytes_used = models.PositiveBigIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["scope"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subscription", "scope"],
+                name="unique_usage_counter_scope_per_subscription",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "scope"]),
+            models.Index(fields=["period_end"]),
+        ]
+
+    def __str__(self):
+        return f"{self.subscription_id}: {self.scope} {self.bytes_used} bytes"
