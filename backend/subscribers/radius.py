@@ -35,72 +35,81 @@ def _rate_limit(package) -> str:
     return f"{package.upload_speed_mbps}M/{package.download_speed_mbps}M"
 
 
-@transaction.atomic
 def authorize_radius(
     *,
     packet_src_ip: str,
     username: str,
     calling_station_id: str = "",
 ) -> RadiusAuthorization:
-    router = _router_for_source(packet_src_ip)
-    try:
-        credential = (
-            SubscriberCredential.objects.select_related("subscriber")
-            .select_for_update()
-            .get(tenant=router.tenant, username=username)
-        )
-    except SubscriberCredential.DoesNotExist as exc:
-        raise RadiusReject("Unknown subscriber") from exc
+    expired = False
+    authorization = None
 
-    subscriber = credential.subscriber
-    if subscriber.status != Subscriber.Status.ACTIVE:
-        raise RadiusReject("Subscriber is not active")
-
-    subscription = (
-        Subscription.objects.select_related("package")
-        .select_for_update()
-        .filter(subscriber=subscriber, status=Subscription.Status.ACTIVE)
-        .order_by("-started_at")
-        .first()
-    )
-    now = timezone.now()
-    if not subscription:
-        raise RadiusReject("No active subscription")
-    if subscription.expires_at <= now:
-        subscription.status = Subscription.Status.EXPIRED
-        subscription.save(update_fields=["status", "updated_at"])
-        subscriber.status = Subscriber.Status.EXPIRED
-        subscriber.save(update_fields=["status", "updated_at"])
-        raise RadiusReject("Subscription expired")
-    if not subscription.package.enabled:
-        raise RadiusReject("Package disabled")
-
-    station = ""
-    if calling_station_id:
+    with transaction.atomic():
+        router = _router_for_source(packet_src_ip)
         try:
-            station = normalize_mac(calling_station_id)
-        except Exception as exc:
-            raise RadiusReject("Invalid station MAC") from exc
+            credential = (
+                SubscriberCredential.objects.select_related("subscriber")
+                .select_for_update()
+                .get(tenant=router.tenant, username=username)
+            )
+        except SubscriberCredential.DoesNotExist as exc:
+            raise RadiusReject("Unknown subscriber") from exc
 
-    if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
-        if not station or station != subscriber.mac_address:
-            raise RadiusReject("MAC mismatch")
-    if (
-        subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
-        and subscriber.mac_address
-        and station != subscriber.mac_address
-    ):
-        raise RadiusReject("MAC mismatch")
+        subscriber = credential.subscriber
+        if subscriber.status != Subscriber.Status.ACTIVE:
+            raise RadiusReject("Subscriber is not active")
 
-    seconds_remaining = int((subscription.expires_at - now).total_seconds())
-    if seconds_remaining <= 0:
+        subscription = (
+            Subscription.objects.select_related("package")
+            .select_for_update()
+            .filter(subscriber=subscriber, status=Subscription.Status.ACTIVE)
+            .order_by("-started_at")
+            .first()
+        )
+        now = timezone.now()
+        if not subscription:
+            raise RadiusReject("No active subscription")
+
+        if subscription.expires_at <= now:
+            subscription.status = Subscription.Status.EXPIRED
+            subscription.save(update_fields=["status", "updated_at"])
+            subscriber.status = Subscriber.Status.EXPIRED
+            subscriber.save(update_fields=["status", "updated_at"])
+            expired = True
+        else:
+            if not subscription.package.enabled:
+                raise RadiusReject("Package disabled")
+
+            station = ""
+            if calling_station_id:
+                try:
+                    station = normalize_mac(calling_station_id)
+                except Exception as exc:
+                    raise RadiusReject("Invalid station MAC") from exc
+
+            if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
+                if not station or station != subscriber.mac_address:
+                    raise RadiusReject("MAC mismatch")
+            if (
+                subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
+                and subscriber.mac_address
+                and station != subscriber.mac_address
+            ):
+                raise RadiusReject("MAC mismatch")
+
+            seconds_remaining = int((subscription.expires_at - now).total_seconds())
+            authorization = RadiusAuthorization(
+                password=credential.get_password(),
+                rate_limit=_rate_limit(subscription.package),
+                session_timeout=seconds_remaining,
+                simultaneous_sessions=subscription.package.simultaneous_sessions,
+            )
+
+    if expired:
         raise RadiusReject("Subscription expired")
-    return RadiusAuthorization(
-        password=credential.get_password(),
-        rate_limit=_rate_limit(subscription.package),
-        session_timeout=seconds_remaining,
-        simultaneous_sessions=subscription.package.simultaneous_sessions,
-    )
+    if authorization is None:  # pragma: no cover - defensive
+        raise RadiusReject("Unable to authorize subscriber")
+    return authorization
 
 
 def freeradius_success_payload(authorization: RadiusAuthorization) -> dict:
