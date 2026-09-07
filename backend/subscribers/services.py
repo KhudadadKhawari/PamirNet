@@ -129,7 +129,10 @@ def assign_package(
         expires_at=add_calendar_duration(now, value, unit),
         status=Subscription.Status.ACTIVE,
     )
-    if subscriber.status != Subscriber.Status.ACTIVE:
+    if subscriber.status in {
+        Subscriber.Status.EXPIRED,
+        Subscriber.Status.QUOTA_EXHAUSTED,
+    }:
         subscriber.status = Subscriber.Status.ACTIVE
         subscriber.save(update_fields=["status", "updated_at"])
     return subscription
