@@ -4,57 +4,55 @@ PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroT
 
 ## Current status
 
-Phase 0 foundation is complete. Phase 1 identity, tenancy and RBAC work is in progress.
+**Phase 0 complete:** project foundation, Django/DRF, React/TypeScript, PostgreSQL, Redis/Celery, Docker Compose, OpenAPI and CI.
 
-Phase 0 established:
+**Phase 1 complete:** JWT authentication, isolated tenants, Owner bootstrap, custom RBAC, platform administration, audited impersonation and append-only audit logs.
 
-- architecture and domain documentation
-- Django + Django REST Framework backend scaffold
-- React + TypeScript + Vite frontend scaffold
-- PostgreSQL, Redis and Celery development services
-- Docker Compose development environment
-- OpenAPI/Swagger support
-- basic backend/frontend health integration
-- GitHub Actions CI
+**Phase 2 implemented:**
 
-Phase 1 now adds JWT authentication, tenant isolation, custom roles/permissions, platform administration, audited impersonation and append-only audit APIs. RADIUS and MikroTik integration remain Phase 2.
+- per-tenant MikroTik router registry
+- central WireGuard provisioning for RouterOS 7+
+- automatic tunnel IP allocation
+- one-time MikroTik onboarding scripts
+- encrypted RouterOS credentials and RADIUS shared secrets
+- RouterOS legacy API, API-SSL and REST connectivity
+- FreeRADIUS runtime and dynamically rendered NAS/client configuration
+- automatic FreeRADIUS client reloads
+- periodic router uptime/latency/packet-loss health checks
+- router connectivity testing and key rotation from the UI
+- Docker/Celery Beat integration
+
+PamirNet Edge remains a future component. The current architecture uses a central VPS for FreeRADIUS and management, with MikroTik routers connected over WireGuard.
 
 ## Stack
 
 - Backend: Python, Django, Django REST Framework
-- Database: PostgreSQL
-- Async/cache: Redis + Celery
 - Frontend: React, TypeScript, Vite, Tailwind CSS
-- API docs: drf-spectacular / OpenAPI
-- AAA: FreeRADIUS (Phase 2+)
-- Deployment: Docker Compose initially
+- Data: PostgreSQL, Redis
+- Async: Celery + Celery Beat
+- AAA: FreeRADIUS
+- Network control: WireGuard + MikroTik RouterOS API/REST
+- Deployment: Docker Compose
 
-## Quick start
+## Development
 
 ```bash
 cp .env.example .env
-make up
+# Configure WIREGUARD_SERVER_PUBLIC_KEY, WIREGUARD_ENDPOINT and PAMIRNET_ENCRYPTION_KEY.
+docker compose up --build
 ```
 
-Then open:
+- UI: `http://localhost:5173`
+- API: `http://localhost:8000/api/`
+- Swagger: `http://localhost:8000/api/docs/`
 
-- UI: http://localhost:5173
-- API health: http://localhost:8000/api/health/
-- API docs: http://localhost:8000/api/docs/
-- OpenAPI schema: http://localhost:8000/api/schema/
+See `docs/phase-2-networking.md` for MikroTik/FreeRADIUS onboarding and WireGuard server setup.
 
-## Repository layout
+## Roadmap
 
-```text
-PamirNet/
-├── backend/        Django/DRF API
-├── frontend/       React/TypeScript UI
-├── freeradius/     FreeRADIUS integration (future phases)
-├── infra/          deployment/networking infrastructure
-├── docs/           architecture and product specifications
-├── .github/        CI workflows
-├── docker-compose.yml
-└── Makefile
-```
-
-See [docs/roadmap.md](docs/roadmap.md) for implementation phases.
+- Phase 3: packages, subscribers, subscriptions and actual RADIUS authorization
+- Phase 4: sessions/accounting, CoA and MAC locking
+- Phase 5: quota/FUP engine
+- Phase 6: voucher batches and CSV export
+- Phase 7: analytics/dashboard/router health expansion
+- Future: PamirNet Edge for local/offline AAA and store-and-forward synchronization
