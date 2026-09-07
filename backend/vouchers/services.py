@@ -119,3 +119,12 @@ def disable_batch(batch: VoucherBatch) -> int:
     return batch.vouchers.filter(
         status__in=[Voucher.Status.GENERATED, Voucher.Status.ACTIVE]
     ).update(status=Voucher.Status.DISABLED, updated_at=timezone.now())
+
+
+def expire_due_vouchers() -> int:
+    now = timezone.now()
+    return Voucher.objects.filter(
+        status=Voucher.Status.ACTIVE,
+        expires_at__isnull=False,
+        expires_at__lte=now,
+    ).update(status=Voucher.Status.EXPIRED, updated_at=now)
