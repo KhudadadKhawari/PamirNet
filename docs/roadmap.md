@@ -2,7 +2,7 @@
 
 ## Phase 0 — Foundation
 
-Status: scaffolded
+Status: complete
 
 - architecture and domain documentation
 - Docker Compose development environment
@@ -15,6 +15,8 @@ Status: scaffolded
 - GitHub Actions CI
 
 ## Phase 1 — Identity, tenancy and RBAC
+
+Status: in progress
 
 - application authentication
 - Tenant model and isolation
