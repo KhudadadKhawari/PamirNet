@@ -1,5 +1,8 @@
+import json
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 
@@ -44,6 +47,12 @@ def serialize_membership(membership):
     }
 
 
+def _json_safe(value):
+    if value in (None, ""):
+        return {}
+    return json.loads(json.dumps(value, cls=DjangoJSONEncoder))
+
+
 def audit(request, action, *, tenant=None, target=None, before=None, after=None, metadata=None):
     token = getattr(request, "auth", None)
     impersonation = None
@@ -64,9 +73,9 @@ def audit(request, action, *, tenant=None, target=None, before=None, after=None,
         target_type=target.__class__.__name__ if target else "",
         target_id=str(target.pk) if target else "",
         source_ip=client_ip(request),
-        before=before or {},
-        after=after or {},
-        metadata=metadata or {},
+        before=_json_safe(before),
+        after=_json_safe(after),
+        metadata=_json_safe(metadata),
     )
 
 
