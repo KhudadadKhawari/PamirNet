@@ -10,6 +10,13 @@ rest pamirnet_rest {
         header = "X-PamirNet-Radius-Token: %{env:RADIUS_INTERNAL_TOKEN}"
     }
 
+    accounting {
+        uri = "${..connect_uri}/api/internal/radius/accounting/?username=%{urlquote:%{User-Name}}&packet_src_ip=%{Packet-Src-IP-Address}&acct_status_type=%{urlquote:%{Acct-Status-Type}}&acct_session_id=%{urlquote:%{Acct-Session-Id}}&acct_unique_session_id=%{urlquote:%{Acct-Unique-Session-Id}}&framed_ip_address=%{urlquote:%{Framed-IP-Address}}&calling_station_id=%{urlquote:%{Calling-Station-Id}}&nas_port_id=%{urlquote:%{NAS-Port-Id}}&service_type=%{urlquote:%{Service-Type}}&acct_input_octets=%{Acct-Input-Octets}&acct_output_octets=%{Acct-Output-Octets}&acct_input_gigawords=%{Acct-Input-Gigawords}&acct_output_gigawords=%{Acct-Output-Gigawords}&acct_session_time=%{Acct-Session-Time}&acct_delay_time=%{Acct-Delay-Time}&acct_terminate_cause=%{urlquote:%{Acct-Terminate-Cause}}&event_timestamp=%{urlquote:%{Event-Timestamp}}"
+        method = "post"
+        body = "json"
+        header = "X-PamirNet-Radius-Token: %{env:RADIUS_INTERNAL_TOKEN}"
+    }
+
     post-auth {
         uri = "${..connect_uri}/api/internal/radius/post-auth/?username=%{urlquote:%{User-Name}}&packet_src_ip=%{Packet-Src-IP-Address}&calling_station_id=%{urlquote:%{Calling-Station-Id}}"
         method = "post"
