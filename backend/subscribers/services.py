@@ -38,10 +38,18 @@ def add_calendar_duration(start, value: int, unit: str):
     raise ValidationError("Unsupported duration unit.")
 
 
+def _radius_username_taken(tenant, username: str) -> bool:
+    if SubscriberCredential.objects.filter(tenant=tenant, username=username).exists():
+        return True
+    from vouchers.models import Voucher
+
+    return Voucher.objects.filter(tenant=tenant, username=username).exists()
+
+
 def _generate_username(tenant) -> str:
     for _ in range(100):
         username = "".join(secrets.choice(string.digits) for _ in range(USERNAME_DIGITS))
-        if not SubscriberCredential.objects.filter(tenant=tenant, username=username).exists():
+        if not _radius_username_taken(tenant, username):
             return username
     raise ValidationError("Unable to generate a unique subscriber username.")
 
@@ -75,8 +83,8 @@ def create_subscriber(*, tenant, data: dict):
         password = generate_password()
         generated_password = password
 
-    if SubscriberCredential.objects.filter(tenant=tenant, username=username).exists():
-        raise ValidationError("This subscriber username already exists for the tenant.")
+    if _radius_username_taken(tenant, username):
+        raise ValidationError("This RADIUS username already exists for the tenant.")
 
     mac_mode = data.get("mac_lock_mode", Subscriber.MacLockMode.NONE)
     data["mac_address"] = _validate_mac_fields(mac_mode, data.get("mac_address"))

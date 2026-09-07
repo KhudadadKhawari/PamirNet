@@ -10,18 +10,11 @@ PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroT
 
 **Phase 2 complete:** MikroTik router registry, WireGuard provisioning, encrypted NAS/API credentials, RouterOS API/REST control, central FreeRADIUS clients and router health monitoring.
 
-**Phase 3 implemented:**
+**Phase 3 complete:** packages, subscribers, encrypted RADIUS credentials, subscriptions, renewals, expiry, MAC locking and tenant-aware FreeRADIUS authorization.
 
-- tenant-scoped package management with speed, duration and optional price
-- subscriber profiles and encrypted RADIUS credentials
-- manual or automatically generated subscriber credentials
-- subscription history, renewal and immediate package switching
-- calendar-based expiration with automatic expiry task
-- manual and first-login MAC locking
-- FreeRADIUS `rlm_rest` authorization against PamirNet
-- NAS-based tenant resolution, allowing duplicate usernames across ISPs
-- MikroTik rate-limit, session-timeout and interim-accounting reply attributes
-- tenant Package and Subscriber UI
+**Phase 4 complete:** daily/weekly/monthly/subscription quotas, multi-stage FUP, effective-policy calculation and RADIUS throttle/block enforcement.
+
+**Phase 5 complete:** voucher batches, 8-digit/6-digit numeric credentials, first-login activation, simultaneous-session rules, quota/expiry enforcement, CSV export and bulk disable.
 
 PamirNet Edge remains a future component. The current architecture uses a central VPS for FreeRADIUS and management, with MikroTik routers connected over WireGuard.
 
@@ -48,12 +41,10 @@ docker compose up --build
 - API: `http://localhost:8000/api/`
 - Swagger: `http://localhost:8000/api/docs/`
 
-See `docs/phase-2-networking.md` and `docs/phase-3-subscribers-radius.md`.
+See the `docs/` directory for phase-specific architecture and implementation notes.
 
 ## Roadmap
 
-- Phase 4: sessions/accounting, CoA and live-session controls
-- Phase 5: quota/FUP engine
-- Phase 6: voucher batches and CSV export
-- Phase 7: analytics/dashboard/router health expansion
+- Phase 6: RADIUS accounting, online sessions, CoA/disconnect and analytics
+- Phase 7: production hardening and AWKH rollout
 - Future: PamirNet Edge for local/offline AAA and store-and-forward synchronization

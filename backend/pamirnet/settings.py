@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "core",
     "networking",
     "subscribers",
+    "vouchers",
 ]
 
 MIDDLEWARE = [
@@ -105,7 +106,7 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "PamirNet API",
     "DESCRIPTION": "PamirNet ISP subscriber management and AAA API",
-    "VERSION": "0.4.0",
+    "VERSION": "0.5.0",
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -127,6 +128,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "expire-subscriber-packages-every-minute": {
         "task": "subscribers.expire_due_subscriptions",
+        "schedule": 60.0,
+    },
+    "expire-vouchers-every-minute": {
+        "task": "vouchers.expire_due_vouchers",
         "schedule": 60.0,
     },
 }
