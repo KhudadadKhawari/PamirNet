@@ -16,7 +16,7 @@ Status: complete
 
 ## Phase 1 — Identity, tenancy and RBAC
 
-Status: in progress
+Status: complete
 
 - application authentication
 - Tenant model and isolation
@@ -28,15 +28,17 @@ Status: in progress
 
 ## Phase 2 — Networking and RADIUS
 
+Status: complete
+
 - router/NAS registration
 - WireGuard onboarding/config generation
-- FreeRADIUS service and SQL integration
+- FreeRADIUS service and REST integration
 - MikroTik RouterOS API/REST integration
-- Hotspot and PPPoE authentication
-- CoA/disconnect
-- online sessions
+- Hotspot and PPPoE authentication foundation
 
 ## Phase 3 — Subscribers and subscriptions
+
+Status: complete
 
 - subscriber CRUD/search/filter
 - manual/generated credentials
@@ -44,8 +46,11 @@ Status: in progress
 - subscription lifecycle
 - renewals and expiry
 - immediate package changes
+- base package speed/duration/price configuration
 
 ## Phase 4 — Packages and policy engine
+
+Status: complete
 
 - package CRUD
 - speed limits
@@ -54,6 +59,8 @@ Status: in progress
 - daily/weekly/monthly/subscription quotas
 - multi-stage FUP
 - effective-policy calculation
+- RADIUS throttle/block enforcement
+- package FUP/quota management UI
 
 ## Phase 5 — Vouchers
 
@@ -75,6 +82,7 @@ Status: in progress
 - custom-range analytics
 - sorting/filtering
 - router latency/uptime/packet loss
+- CoA/disconnect and live-session controls
 
 ## Phase 7 — Production hardening and AWKH rollout
 

@@ -6,6 +6,7 @@ from django.utils import timezone
 from networking.models import Router
 
 from .models import Subscriber, SubscriberCredential, Subscription
+from .policy import calculate_effective_policy
 from .services import normalize_mac
 
 
@@ -31,8 +32,8 @@ def _router_for_source(packet_src_ip: str) -> Router:
         raise RadiusReject("Unknown NAS") from exc
 
 
-def _rate_limit(package) -> str:
-    return f"{package.upload_speed_mbps}M/{package.download_speed_mbps}M"
+def _rate_limit(upload_speed_mbps: int, download_speed_mbps: int) -> str:
+    return f"{upload_speed_mbps}M/{download_speed_mbps}M"
 
 
 def authorize_radius(
@@ -42,6 +43,7 @@ def authorize_radius(
     calling_station_id: str = "",
 ) -> RadiusAuthorization:
     expired = False
+    quota_blocked = False
     authorization = None
 
     with transaction.atomic():
@@ -56,11 +58,14 @@ def authorize_radius(
             raise RadiusReject("Unknown subscriber") from exc
 
         subscriber = credential.subscriber
-        if subscriber.status != Subscriber.Status.ACTIVE:
+        if subscriber.status not in {
+            Subscriber.Status.ACTIVE,
+            Subscriber.Status.QUOTA_EXHAUSTED,
+        }:
             raise RadiusReject("Subscriber is not active")
 
         subscription = (
-            Subscription.objects.select_related("package")
+            Subscription.objects.select_related("package", "tenant")
             .select_for_update()
             .filter(subscriber=subscriber, status=Subscription.Status.ACTIVE)
             .order_by("-started_at")
@@ -76,37 +81,52 @@ def authorize_radius(
             subscriber.status = Subscriber.Status.EXPIRED
             subscriber.save(update_fields=["status", "updated_at"])
             expired = True
+        elif not subscription.package.enabled:
+            raise RadiusReject("Package disabled")
         else:
-            if not subscription.package.enabled:
-                raise RadiusReject("Package disabled")
+            effective = calculate_effective_policy(subscription, at=now)
+            if effective.blocked:
+                if subscriber.status != Subscriber.Status.QUOTA_EXHAUSTED:
+                    subscriber.status = Subscriber.Status.QUOTA_EXHAUSTED
+                    subscriber.save(update_fields=["status", "updated_at"])
+                quota_blocked = True
+            else:
+                if subscriber.status == Subscriber.Status.QUOTA_EXHAUSTED:
+                    subscriber.status = Subscriber.Status.ACTIVE
+                    subscriber.save(update_fields=["status", "updated_at"])
 
-            station = ""
-            if calling_station_id:
-                try:
-                    station = normalize_mac(calling_station_id)
-                except Exception as exc:
-                    raise RadiusReject("Invalid station MAC") from exc
+                station = ""
+                if calling_station_id:
+                    try:
+                        station = normalize_mac(calling_station_id)
+                    except Exception as exc:
+                        raise RadiusReject("Invalid station MAC") from exc
 
-            if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
-                if not station or station != subscriber.mac_address:
+                if subscriber.mac_lock_mode == Subscriber.MacLockMode.MANUAL:
+                    if not station or station != subscriber.mac_address:
+                        raise RadiusReject("MAC mismatch")
+                if (
+                    subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
+                    and subscriber.mac_address
+                    and station != subscriber.mac_address
+                ):
                     raise RadiusReject("MAC mismatch")
-            if (
-                subscriber.mac_lock_mode == Subscriber.MacLockMode.FIRST_LOGIN
-                and subscriber.mac_address
-                and station != subscriber.mac_address
-            ):
-                raise RadiusReject("MAC mismatch")
 
-            seconds_remaining = int((subscription.expires_at - now).total_seconds())
-            authorization = RadiusAuthorization(
-                password=credential.get_password(),
-                rate_limit=_rate_limit(subscription.package),
-                session_timeout=seconds_remaining,
-                simultaneous_sessions=subscription.package.simultaneous_sessions,
-            )
+                seconds_remaining = int((subscription.expires_at - now).total_seconds())
+                authorization = RadiusAuthorization(
+                    password=credential.get_password(),
+                    rate_limit=_rate_limit(
+                        effective.upload_speed_mbps,
+                        effective.download_speed_mbps,
+                    ),
+                    session_timeout=seconds_remaining,
+                    simultaneous_sessions=subscription.package.simultaneous_sessions,
+                )
 
     if expired:
         raise RadiusReject("Subscription expired")
+    if quota_blocked:
+        raise RadiusReject("Usage quota exhausted")
     if authorization is None:  # pragma: no cover - defensive
         raise RadiusReject("Unable to authorize subscriber")
     return authorization
