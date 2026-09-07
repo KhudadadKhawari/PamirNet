@@ -71,8 +71,17 @@ class PhaseSixAccountingTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {response.data['access']}")
 
-    def accounting(self, status_type, *, username="10000001", input_bytes=0, output_bytes=0,
-                   session_time=0, session_id="session-1", terminate_cause=""):
+    def accounting(
+        self,
+        status_type,
+        *,
+        username="10000001",
+        input_bytes=0,
+        output_bytes=0,
+        session_time=0,
+        session_id="session-1",
+        terminate_cause="",
+    ):
         return self.client.post(
             "/api/internal/radius/accounting/",
             {
@@ -88,6 +97,7 @@ class PhaseSixAccountingTests(TestCase):
                 "acct_input_octets": input_bytes,
                 "acct_output_octets": output_bytes,
                 "acct_session_time": session_time,
+                "acct_terminate_cause": terminate_cause,
             },
             format="json",
             HTTP_X_PAMIRNET_RADIUS_TOKEN="test-radius-token",
@@ -185,7 +195,11 @@ class PhaseSixAccountingTests(TestCase):
         run.return_value.stderr = ""
         self.accounting("Start")
         session = RadiusSession.objects.get(username="10000001")
-        response = self.client.post(f"/api/sessions/{session.id}/disconnect/", {}, format="json")
+        response = self.client.post(
+            f"/api/sessions/{session.id}/disconnect/",
+            {},
+            format="json",
+        )
         self.assertEqual(response.status_code, 200, response.data)
         session.refresh_from_db()
         self.assertIsNotNone(session.disconnect_requested_at)
@@ -205,7 +219,7 @@ class PhaseSixAccountingTests(TestCase):
         )
         UsagePolicyStage.objects.create(
             policy=policy,
-            threshold_gb=Decimal("0.000001"),
+            threshold_gb=Decimal("0.001"),
             action=UsagePolicyStage.Action.THROTTLE,
             download_speed_mbps=1,
             upload_speed_mbps=1,
@@ -213,8 +227,8 @@ class PhaseSixAccountingTests(TestCase):
         self.accounting("Start")
         self.accounting(
             "Interim-Update",
-            input_bytes=1000,
-            output_bytes=1000,
+            input_bytes=600000,
+            output_bytes=600000,
             session_time=60,
         )
         session = RadiusSession.objects.get(username="10000001")
@@ -237,7 +251,8 @@ class PhaseSixAccountingTests(TestCase):
         self.assertEqual(dashboard.data["today_total_bytes"], 5000)
 
         identities = self.client.get(
-            "/api/analytics/identities/?ordering=-total_bytes&identity_type=subscriber"
+            "/api/analytics/identities/"
+            "?ordering=-total_bytes&identity_type=subscriber"
         )
         self.assertEqual(identities.status_code, 200, identities.data)
         self.assertEqual(identities.data[0]["username"], "10000001")
