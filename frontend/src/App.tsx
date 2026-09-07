@@ -4,6 +4,8 @@ import type { FormEvent, ReactNode } from "react";
 import { request } from "./api";
 import type { Me, TenantSummary } from "./api";
 import { NetworkingPage } from "./NetworkingPage";
+import { PackagesPage } from "./PackagesPage";
+import { SubscribersPage } from "./SubscribersPage";
 
 type LoginResult = { access: string };
 type TenantChoice = { id: string; name: string; slug: string };
@@ -44,7 +46,7 @@ export default function App() {
   useEffect(() => {
     if (access) loadMe(access).catch(() => refresh());
     else void refresh();
-  }, []); // Initial auth bootstrap only.
+  }, []);
 
   if (state === "loading") return <CenteredMessage text="Loading PamirNet…" />;
   if (state === "anonymous") {
@@ -60,7 +62,9 @@ export default function App() {
       onExitImpersonation={async () => { await request<void>("/platform/impersonation/stop/", { method: "POST" }, access); await refresh(); }}
       onLogout={async () => {
         await request<void>("/auth/logout/", { method: "POST" }).catch(() => undefined);
-        storeAccess(null); setMe(null); setState("anonymous");
+        storeAccess(null);
+        setMe(null);
+        setState("anonymous");
       }}
     />
   );
@@ -75,7 +79,9 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setSubmitting(true); setError("");
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
     try {
       const result = await request<LoginResult>("/auth/login/", {
         method: "POST",
@@ -85,18 +91,22 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
     } catch (rawError) {
       const apiError = rawError as Error & { status?: number; payload?: LoginConflict };
       if (apiError.status === 409 && apiError.payload?.tenants?.length) {
-        setTenantChoices(apiError.payload.tenants); setTenantId(apiError.payload.tenants[0].id); setError("Select the ISP account to continue.");
+        setTenantChoices(apiError.payload.tenants);
+        setTenantId(apiError.payload.tenants[0].id);
+        setError("Select the ISP account to continue.");
       } else setError(apiError.payload?.detail || "Login failed.");
-    } finally { setSubmitting(false); }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 text-slate-900">
       <form onSubmit={submit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">ISP Operations</p><h1 className="mt-1 text-2xl font-bold">PamirNet</h1></div>
-        <Field label="Email"><input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
-        <Field label="Password"><input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
-        {tenantChoices.length > 0 && <Field label="ISP"><select className="input" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>{tenantChoices.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></Field>}
+        <Field label="Email"><input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
+        <Field label="Password"><input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></Field>
+        {tenantChoices.length > 0 && <Field label="ISP"><select className="input" value={tenantId} onChange={(event) => setTenantId(event.target.value)}>{tenantChoices.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></Field>}
         {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
         <button className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={submitting}>{submitting ? "Signing in…" : "Sign in"}</button>
       </form>
@@ -105,13 +115,19 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
 }
 
 function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }: {
-  access: string; me: Me; onAccessChanged: (access: string) => Promise<void>; onExitImpersonation: () => Promise<void>; onLogout: () => Promise<void>;
+  access: string;
+  me: Me;
+  onAccessChanged: (access: string) => Promise<void>;
+  onExitImpersonation: () => Promise<void>;
+  onLogout: () => Promise<void>;
 }) {
-  if (me.is_platform_admin && !me.tenant) return <PlatformHome access={access} me={me} onAccessChanged={onAccessChanged} onLogout={onLogout} />;
+  if (me.is_platform_admin && !me.tenant) {
+    return <PlatformHome access={access} me={me} onAccessChanged={onAccessChanged} onLogout={onLogout} />;
+  }
 
   const navigation = ["Dashboard", "Networking", "Subscribers", "Packages", "Vouchers", "Analytics", "Users & Roles", "Audit", "Settings"];
   const [activePage, setActivePage] = useState("Dashboard");
-  const canManageRouters = me.permissions.includes("*") || me.permissions.includes("router.manage");
+  const permitted = (code: string) => me.permissions.includes("*") || me.permissions.includes(code);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -128,8 +144,10 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
           </header>
           <section className="p-5">
             {activePage === "Dashboard" && <Dashboard me={me} />}
-            {activePage === "Networking" && <NetworkingPage access={access} canManage={canManageRouters} />}
-            {!['Dashboard', 'Networking'].includes(activePage) && <Placeholder page={activePage} />}
+            {activePage === "Networking" && <NetworkingPage access={access} canManage={permitted("router.manage")} />}
+            {activePage === "Packages" && <PackagesPage access={access} canManage={permitted("package.manage")} />}
+            {activePage === "Subscribers" && <SubscribersPage access={access} canCreate={permitted("subscriber.create")} canEdit={permitted("subscriber.edit")} />}
+            {!['Dashboard', 'Networking', 'Packages', 'Subscribers'].includes(activePage) && <Placeholder page={activePage} />}
           </section>
         </main>
       </div>
@@ -138,7 +156,7 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
 }
 
 function Dashboard({ me }: { me: Me }) {
-  return <><div className="grid gap-4 md:grid-cols-3"><InfoCard label="Tenant" value={me.tenant?.name || "—"} /><InfoCard label="Role access" value={`${me.permissions.length} permissions`} /><InfoCard label="Networking" value="Phase 2 active" /></div><div className="mt-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">PamirNet control plane</h2><p className="mt-2 text-sm text-slate-600">Tenant isolation, RBAC and audit are active. Phase 2 adds MikroTik registration, WireGuard provisioning, FreeRADIUS NAS clients and router health monitoring.</p></div></>;
+  return <><div className="grid gap-4 md:grid-cols-3"><InfoCard label="Tenant" value={me.tenant?.name || "—"} /><InfoCard label="Role access" value={`${me.permissions.length} permissions`} /><InfoCard label="AAA" value="Phase 3 active" /></div><div className="mt-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">PamirNet control plane</h2><p className="mt-2 text-sm text-slate-600">MikroTik networking and FreeRADIUS are active. Phase 3 adds packages, subscribers, subscription periods and tenant-aware RADIUS authorization.</p></div></>;
 }
 
 function Placeholder({ page }: { page: string }) {

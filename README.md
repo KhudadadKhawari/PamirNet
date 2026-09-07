@@ -8,19 +8,20 @@ PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroT
 
 **Phase 1 complete:** JWT authentication, isolated tenants, Owner bootstrap, custom RBAC, platform administration, audited impersonation and append-only audit logs.
 
-**Phase 2 implemented:**
+**Phase 2 complete:** MikroTik router registry, WireGuard provisioning, encrypted NAS/API credentials, RouterOS API/REST control, central FreeRADIUS clients and router health monitoring.
 
-- per-tenant MikroTik router registry
-- central WireGuard provisioning for RouterOS 7+
-- automatic tunnel IP allocation
-- one-time MikroTik onboarding scripts
-- encrypted RouterOS credentials and RADIUS shared secrets
-- RouterOS legacy API, API-SSL and REST connectivity
-- FreeRADIUS runtime and dynamically rendered NAS/client configuration
-- automatic FreeRADIUS client reloads
-- periodic router uptime/latency/packet-loss health checks
-- router connectivity testing and key rotation from the UI
-- Docker/Celery Beat integration
+**Phase 3 implemented:**
+
+- tenant-scoped package management with speed, duration and optional price
+- subscriber profiles and encrypted RADIUS credentials
+- manual or automatically generated subscriber credentials
+- subscription history, renewal and immediate package switching
+- calendar-based expiration with automatic expiry task
+- manual and first-login MAC locking
+- FreeRADIUS `rlm_rest` authorization against PamirNet
+- NAS-based tenant resolution, allowing duplicate usernames across ISPs
+- MikroTik rate-limit, session-timeout and interim-accounting reply attributes
+- tenant Package and Subscriber UI
 
 PamirNet Edge remains a future component. The current architecture uses a central VPS for FreeRADIUS and management, with MikroTik routers connected over WireGuard.
 
@@ -30,7 +31,7 @@ PamirNet Edge remains a future component. The current architecture uses a centra
 - Frontend: React, TypeScript, Vite, Tailwind CSS
 - Data: PostgreSQL, Redis
 - Async: Celery + Celery Beat
-- AAA: FreeRADIUS
+- AAA: FreeRADIUS + `rlm_rest`
 - Network control: WireGuard + MikroTik RouterOS API/REST
 - Deployment: Docker Compose
 
@@ -38,7 +39,8 @@ PamirNet Edge remains a future component. The current architecture uses a centra
 
 ```bash
 cp .env.example .env
-# Configure WIREGUARD_SERVER_PUBLIC_KEY, WIREGUARD_ENDPOINT and PAMIRNET_ENCRYPTION_KEY.
+# Configure WIREGUARD_SERVER_PUBLIC_KEY, WIREGUARD_ENDPOINT,
+# PAMIRNET_ENCRYPTION_KEY and RADIUS_INTERNAL_TOKEN.
 docker compose up --build
 ```
 
@@ -46,12 +48,11 @@ docker compose up --build
 - API: `http://localhost:8000/api/`
 - Swagger: `http://localhost:8000/api/docs/`
 
-See `docs/phase-2-networking.md` for MikroTik/FreeRADIUS onboarding and WireGuard server setup.
+See `docs/phase-2-networking.md` and `docs/phase-3-subscribers-radius.md`.
 
 ## Roadmap
 
-- Phase 3: packages, subscribers, subscriptions and actual RADIUS authorization
-- Phase 4: sessions/accounting, CoA and MAC locking
+- Phase 4: sessions/accounting, CoA and live-session controls
 - Phase 5: quota/FUP engine
 - Phase 6: voucher batches and CSV export
 - Phase 7: analytics/dashboard/router health expansion

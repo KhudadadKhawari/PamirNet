@@ -45,6 +45,7 @@ services:
       WIREGUARD_PORT: ${WIREGUARD_PORT:-51820}
       WIREGUARD_INTERFACE: ${WIREGUARD_INTERFACE:-wg0}
       RADIUS_CLIENTS_FILE: /var/lib/pamirnet/freeradius/pamirnet.conf
+      RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN:-dev-radius-internal-token}
     volumes:
       - ./backend:/app
       - radius_clients:/var/lib/pamirnet/freeradius
@@ -87,11 +88,15 @@ services:
   freeradius:
     build:
       context: ./freeradius
+    environment:
+      RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN:-dev-radius-internal-token}
     volumes:
       - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
+    depends_on:
+      - backend
     restart: unless-stopped
 
   freeradius-reloader:
@@ -99,6 +104,8 @@ services:
       context: ./freeradius
     command: /usr/local/bin/watch-clients.sh
     pid: "service:freeradius"
+    environment:
+      RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN:-dev-radius-internal-token}
     volumes:
       - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
     depends_on:
