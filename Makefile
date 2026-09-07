@@ -1,4 +1,4 @@
-.PHONY: up down build logs ps backend-shell migrate makemigrations test lint frontend-install frontend-build
+.PHONY: up down build logs ps backend-shell migrate makemigrations test lint frontend-install frontend-build radius-render wg-server-keys
 
 up:
 	docker compose up -d --build
@@ -38,3 +38,9 @@ frontend-install:
 
 frontend-build:
 	docker compose exec frontend npm run build
+
+radius-render:
+	docker compose exec backend python manage.py render_radius_clients
+
+wg-server-keys:
+	docker compose exec backend python manage.py wireguard_server_keys

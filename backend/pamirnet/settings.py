@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "core",
+    "networking",
 ]
 
 MIDDLEWARE = [
@@ -103,7 +104,7 @@ SIMPLE_JWT = {
 SPECTACULAR_SETTINGS = {
     "TITLE": "PamirNet API",
     "DESCRIPTION": "PamirNet ISP subscriber management and AAA API",
-    "VERSION": "0.2.0",
+    "VERSION": "0.3.0",
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -118,3 +119,19 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 300
+CELERY_BEAT_SCHEDULE = {
+    "networking-health-every-30-seconds": {
+        "task": "networking.check_all_routers",
+        "schedule": 30.0,
+    }
+}
+
+# Phase 2 networking. Set an independent Fernet key in production.
+PAMIRNET_ENCRYPTION_KEY = os.getenv("PAMIRNET_ENCRYPTION_KEY", "")
+WIREGUARD_CLIENT_SUBNET = os.getenv("WIREGUARD_CLIENT_SUBNET", "10.250.0.0/16")
+WIREGUARD_SERVER_ADDRESS = os.getenv("WIREGUARD_SERVER_ADDRESS", "10.250.0.1/16")
+WIREGUARD_SERVER_PUBLIC_KEY = os.getenv("WIREGUARD_SERVER_PUBLIC_KEY", "")
+WIREGUARD_ENDPOINT = os.getenv("WIREGUARD_ENDPOINT", "")
+WIREGUARD_PORT = int(os.getenv("WIREGUARD_PORT", "51820"))
+WIREGUARD_INTERFACE = os.getenv("WIREGUARD_INTERFACE", "wg0")
+RADIUS_CLIENTS_FILE = os.getenv("RADIUS_CLIENTS_FILE", "/tmp/pamirnet-radius-clients.conf")

@@ -27,8 +27,8 @@ services:
   backend:
     build:
       context: ./backend
-    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
-    environment:
+    command: sh -c "python manage.py migrate && python manage.py render_radius_clients && python manage.py runserver 0.0.0.0:8000"
+    environment: &backend-env
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
@@ -37,8 +37,17 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      PAMIRNET_ENCRYPTION_KEY: ${PAMIRNET_ENCRYPTION_KEY:-}
+      WIREGUARD_CLIENT_SUBNET: ${WIREGUARD_CLIENT_SUBNET:-10.250.0.0/16}
+      WIREGUARD_SERVER_ADDRESS: ${WIREGUARD_SERVER_ADDRESS:-10.250.0.1/16}
+      WIREGUARD_SERVER_PUBLIC_KEY: ${WIREGUARD_SERVER_PUBLIC_KEY:-}
+      WIREGUARD_ENDPOINT: ${WIREGUARD_ENDPOINT:-}
+      WIREGUARD_PORT: ${WIREGUARD_PORT:-51820}
+      WIREGUARD_INTERFACE: ${WIREGUARD_INTERFACE:-wg0}
+      RADIUS_CLIENTS_FILE: /var/lib/pamirnet/freeradius/pamirnet.conf
     volumes:
       - ./backend:/app
+      - radius_clients:/var/lib/pamirnet/freeradius
     ports:
       - "8000:8000"
     depends_on:
@@ -51,20 +60,50 @@ services:
     build:
       context: ./backend
     command: celery -A pamirnet worker -l info
-    environment:
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
-      DATABASE_URL: ${DATABASE_URL:-postgresql://pamirnet:pamirnet@db:5432/pamirnet}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+    environment: *backend-env
     volumes:
       - ./backend:/app
+      - radius_clients:/var/lib/pamirnet/freeradius
     depends_on:
       backend:
         condition: service_started
       redis:
         condition: service_healthy
+
+  celery-beat:
+    build:
+      context: ./backend
+    command: celery -A pamirnet beat -l info
+    environment: *backend-env
+    volumes:
+      - ./backend:/app
+      - radius_clients:/var/lib/pamirnet/freeradius
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_healthy
+
+  freeradius:
+    build:
+      context: ./freeradius
+    volumes:
+      - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    restart: unless-stopped
+
+  freeradius-reloader:
+    build:
+      context: ./freeradius
+    command: /usr/local/bin/watch-clients.sh
+    pid: "service:freeradius"
+    volumes:
+      - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
+    depends_on:
+      - freeradius
+    restart: unless-stopped
 
   frontend:
     build:
@@ -84,3 +123,4 @@ volumes:
   postgres_data:
   redis_data:
   frontend_node_modules:
+  radius_clients:
