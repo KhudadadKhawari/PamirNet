@@ -19,21 +19,19 @@ export type Me = {
   impersonating: boolean;
 };
 
-export async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  access?: string | null,
-): Promise<T> {
+function headersFor(options: RequestInit, access?: string | null) {
   const headers = new Headers(options.headers);
   if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
   if (access) headers.set("Authorization", `Bearer ${access}`);
+  return headers;
+}
 
+async function apiFetch(path: string, options: RequestInit = {}, access?: string | null) {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers,
+    headers: headersFor(options, access),
     credentials: "include",
   });
-
   if (!response.ok) {
     let payload: unknown = null;
     try {
@@ -49,7 +47,35 @@ export async function request<T>(
     error.payload = payload;
     throw error;
   }
+  return response;
+}
 
+export async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  access?: string | null,
+): Promise<T> {
+  const response = await apiFetch(path, options, access);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+export async function downloadFile(
+  path: string,
+  fallbackName: string,
+  access?: string | null,
+): Promise<void> {
+  const response = await apiFetch(path, {}, access);
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const filename = match?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
