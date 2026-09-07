@@ -6,6 +6,7 @@ import type { Me, TenantSummary } from "./api";
 import { NetworkingPage } from "./NetworkingPage";
 import { PackagesPage } from "./PackagesPage";
 import { SubscribersPage } from "./SubscribersPage";
+import { VouchersPage } from "./VouchersPage";
 
 type LoginResult = { access: string };
 type TenantChoice = { id: string; name: string; slug: string };
@@ -147,7 +148,8 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
             {activePage === "Networking" && <NetworkingPage access={access} canManage={permitted("router.manage")} />}
             {activePage === "Packages" && <PackagesPage access={access} canManage={permitted("package.manage")} />}
             {activePage === "Subscribers" && <SubscribersPage access={access} canCreate={permitted("subscriber.create")} canEdit={permitted("subscriber.edit")} />}
-            {!['Dashboard', 'Networking', 'Packages', 'Subscribers'].includes(activePage) && <Placeholder page={activePage} />}
+            {activePage === "Vouchers" && <VouchersPage access={access} canGenerate={permitted("voucher.generate")} canExport={permitted("voucher.export")} canDisable={permitted("voucher.disable")} />}
+            {!['Dashboard', 'Networking', 'Packages', 'Subscribers', 'Vouchers'].includes(activePage) && <Placeholder page={activePage} />}
           </section>
         </main>
       </div>
@@ -156,7 +158,7 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
 }
 
 function Dashboard({ me }: { me: Me }) {
-  return <><div className="grid gap-4 md:grid-cols-3"><InfoCard label="Tenant" value={me.tenant?.name || "—"} /><InfoCard label="Role access" value={`${me.permissions.length} permissions`} /><InfoCard label="AAA" value="Phase 3 active" /></div><div className="mt-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">PamirNet control plane</h2><p className="mt-2 text-sm text-slate-600">MikroTik networking and FreeRADIUS are active. Phase 3 adds packages, subscribers, subscription periods and tenant-aware RADIUS authorization.</p></div></>;
+  return <><div className="grid gap-4 md:grid-cols-3"><InfoCard label="Tenant" value={me.tenant?.name || "—"} /><InfoCard label="Role access" value={`${me.permissions.length} permissions`} /><InfoCard label="AAA" value="Phase 5 active" /></div><div className="mt-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">PamirNet control plane</h2><p className="mt-2 text-sm text-slate-600">MikroTik networking, subscriber AAA, package FUP policies and numeric voucher batches are active.</p></div></>;
 }
 
 function Placeholder({ page }: { page: string }) {
