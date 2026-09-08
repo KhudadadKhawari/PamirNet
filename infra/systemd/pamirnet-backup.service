@@ -1,0 +1,14 @@
+[Unit]
+Description=PamirNet PostgreSQL backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/PamirNet
+Environment=PAMIRNET_ENV_FILE=/opt/PamirNet/.env.production
+ExecStart=/usr/bin/bash /opt/PamirNet/scripts/backup-production.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
