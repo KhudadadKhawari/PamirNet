@@ -192,7 +192,12 @@ class PhaseOneApiTests(TestCase):
             user=existing,
         )
         self.assertTrue(membership.roles.filter(is_owner=True).exists())
-        self.assertTrue(Role.objects.filter(tenant_id=response.data["id"], name="Tenant Admin").exists())
+        self.assertTrue(
+            Role.objects.filter(
+                tenant_id=response.data["id"],
+                name="Tenant Admin",
+            ).exists()
+        )
 
     def test_platform_assignment_automatically_grants_tenant_admin(self):
         self.platform_login()
