@@ -23,5 +23,7 @@ class TenantScopedPermission(BasePermission):
         if not permission_code:
             return True
 
-        membership = request.pamirnet_membership
-        return permission_code in permission_codes_for_membership(membership)
+        granted = permission_codes_for_membership(request.pamirnet_membership)
+        if isinstance(permission_code, (list, tuple, set, frozenset)):
+            return any(code in granted for code in permission_code)
+        return permission_code in granted
