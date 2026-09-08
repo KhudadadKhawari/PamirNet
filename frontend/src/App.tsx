@@ -2,13 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
 import { AnalyticsPage } from "./AnalyticsPage";
+import { AuditPage } from "./AuditPage";
 import { request } from "./api";
-import type { Me, TenantSummary } from "./api";
+import type { Me } from "./api";
 import { DashboardPage } from "./DashboardPage";
 import { NetworkingPage } from "./NetworkingPage";
 import { PackagesPage } from "./PackagesPage";
+import { PlatformPage } from "./PlatformPage";
 import { SessionsPage } from "./SessionsPage";
+import { SettingsPage } from "./SettingsPage";
 import { SubscribersPage } from "./SubscribersPage";
+import { UsersRolesPage } from "./UsersRolesPage";
 import { VouchersPage } from "./VouchersPage";
 
 type LoginResult = { access: string };
@@ -54,7 +58,14 @@ export default function App() {
 
   if (state === "loading") return <CenteredMessage text="Loading PamirNet…" />;
   if (state === "anonymous") {
-    return <LoginScreen onAuthenticated={async (token) => { storeAccess(token); await loadMe(token); }} />;
+    return (
+      <LoginScreen
+        onAuthenticated={async (token) => {
+          storeAccess(token);
+          await loadMe(token);
+        }}
+      />
+    );
   }
   if (!me || !access) return <CenteredMessage text="Loading account…" />;
 
@@ -62,8 +73,18 @@ export default function App() {
     <AppShell
       access={access}
       me={me}
-      onAccessChanged={async (token) => { storeAccess(token); await loadMe(token); }}
-      onExitImpersonation={async () => { await request<void>("/platform/impersonation/stop/", { method: "POST" }, access); await refresh(); }}
+      onAccessChanged={async (token) => {
+        storeAccess(token);
+        await loadMe(token);
+      }}
+      onExitImpersonation={async () => {
+        await request<void>(
+          "/platform/impersonation/stop/",
+          { method: "POST" },
+          access,
+        );
+        await refresh();
+      }}
       onLogout={async () => {
         await request<void>("/auth/logout/", { method: "POST" }).catch(() => undefined);
         storeAccess(null);
@@ -74,7 +95,11 @@ export default function App() {
   );
 }
 
-function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) => Promise<void> }) {
+function LoginScreen({
+  onAuthenticated,
+}: {
+  onAuthenticated: (access: string) => Promise<void>;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [tenantId, setTenantId] = useState("");
@@ -89,7 +114,11 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
     try {
       const result = await request<LoginResult>("/auth/login/", {
         method: "POST",
-        body: JSON.stringify({ email, password, ...(tenantId ? { tenant_id: tenantId } : {}) }),
+        body: JSON.stringify({
+          email,
+          password,
+          ...(tenantId ? { tenant_id: tenantId } : {}),
+        }),
       });
       await onAuthenticated(result.access);
     } catch (rawError) {
@@ -98,7 +127,9 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
         setTenantChoices(apiError.payload.tenants);
         setTenantId(apiError.payload.tenants[0].id);
         setError("Select the ISP account to continue.");
-      } else setError(apiError.payload?.detail || "Login failed.");
+      } else {
+        setError(apiError.payload?.detail || "Login failed.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -106,19 +137,68 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (access: string) =>
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4 text-slate-900">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">ISP Operations</p><h1 className="mt-1 text-2xl font-bold">PamirNet</h1></div>
-        <Field label="Email"><input className="input" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
-        <Field label="Password"><input className="input" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required /></Field>
-        {tenantChoices.length > 0 && <Field label="ISP"><select className="input" value={tenantId} onChange={(event) => setTenantId(event.target.value)}>{tenantChoices.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></Field>}
+      <form
+        onSubmit={submit}
+        className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <div className="mb-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+            ISP Operations
+          </p>
+          <h1 className="mt-1 text-2xl font-bold">PamirNet</h1>
+        </div>
+        <Field label="Email">
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            required
+          />
+        </Field>
+        <Field label="Password">
+          <input
+            className="input"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </Field>
+        {tenantChoices.length > 0 && (
+          <Field label="ISP">
+            <select
+              className="input"
+              value={tenantId}
+              onChange={(event) => setTenantId(event.target.value)}
+            >
+              {tenantChoices.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {error && <p className="mb-4 text-sm text-red-700">{error}</p>}
-        <button className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={submitting}>{submitting ? "Signing in…" : "Sign in"}</button>
+        <button
+          className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+          disabled={submitting}
+        >
+          {submitting ? "Signing in…" : "Sign in"}
+        </button>
       </form>
     </main>
   );
 }
 
-function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }: {
+function AppShell({
+  access,
+  me,
+  onAccessChanged,
+  onExitImpersonation,
+  onLogout,
+}: {
   access: string;
   me: Me;
   onAccessChanged: (access: string) => Promise<void>;
@@ -126,35 +206,151 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
   onLogout: () => Promise<void>;
 }) {
   if (me.is_platform_admin && !me.tenant) {
-    return <PlatformHome access={access} me={me} onAccessChanged={onAccessChanged} onLogout={onLogout} />;
+    return (
+      <PlatformPage
+        access={access}
+        me={me}
+        onAccessChanged={onAccessChanged}
+        onLogout={onLogout}
+      />
+    );
   }
 
-  const navigation = ["Dashboard", "Networking", "Sessions", "Subscribers", "Packages", "Vouchers", "Analytics", "Users & Roles", "Audit", "Settings"];
-  const [activePage, setActivePage] = useState("Dashboard");
-  const permitted = (code: string) => me.permissions.includes("*") || me.permissions.includes(code);
+  const permitted = (code: string) =>
+    me.permissions.includes("*") || me.permissions.includes(code);
+  const navigation = [
+    { label: "Dashboard", visible: permitted("dashboard.view") },
+    { label: "Networking", visible: permitted("router.view") || permitted("router.manage") },
+    { label: "Sessions", visible: permitted("session.view") || permitted("session.disconnect") },
+    {
+      label: "Subscribers",
+      visible:
+        permitted("subscriber.view") ||
+        permitted("subscriber.create") ||
+        permitted("subscriber.edit"),
+    },
+    { label: "Packages", visible: permitted("package.view") || permitted("package.manage") },
+    {
+      label: "Vouchers",
+      visible:
+        permitted("voucher.view") ||
+        permitted("voucher.generate") ||
+        permitted("voucher.export") ||
+        permitted("voucher.disable"),
+    },
+    { label: "Analytics", visible: permitted("analytics.view") },
+    {
+      label: "Users & Roles",
+      visible: permitted("user.manage") || permitted("role.manage"),
+    },
+    { label: "Audit", visible: permitted("audit.view") },
+    { label: "Settings", visible: true },
+  ].filter((item) => item.visible);
+
+  const [activePage, setActivePage] = useState(navigation[0]?.label || "Settings");
+
+  useEffect(() => {
+    if (!navigation.some((item) => item.label === activePage)) {
+      setActivePage(navigation[0]?.label || "Settings");
+    }
+  }, [activePage, navigation.map((item) => item.label).join("|")]);
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      {me.impersonating && <div className="flex items-center justify-between bg-amber-100 px-4 py-2 text-sm text-amber-950"><span>Platform administrator is viewing {me.tenant?.name}.</span><button className="font-semibold underline" onClick={onExitImpersonation}>Exit impersonation</button></div>}
+      {me.impersonating && (
+        <div className="flex items-center justify-between bg-amber-100 px-4 py-2 text-sm text-amber-950">
+          <span>Platform administrator is viewing {me.tenant?.name}.</span>
+          <button className="font-semibold underline" onClick={onExitImpersonation}>
+            Exit impersonation
+          </button>
+        </div>
+      )}
       <div className="flex min-h-screen">
         <aside className="hidden w-56 shrink-0 border-r border-slate-200 bg-slate-900 text-slate-100 md:block">
-          <div className="border-b border-slate-800 px-5 py-5"><div className="font-bold">PamirNet</div><div className="mt-1 truncate text-xs text-slate-400">{me.tenant?.name}</div></div>
-          <nav className="p-3">{navigation.map((item) => <button key={item} onClick={() => setActivePage(item)} className={`mb-1 w-full rounded px-3 py-2 text-left text-sm ${activePage === item ? "bg-slate-800 text-white" : "text-slate-300 hover:bg-slate-800"}`}>{item}</button>)}</nav>
+          <div className="border-b border-slate-800 px-5 py-5">
+            <div className="font-bold">PamirNet</div>
+            <div className="mt-1 truncate text-xs text-slate-400">{me.tenant?.name}</div>
+          </div>
+          <nav className="p-3">
+            {navigation.map((item) => (
+              <button
+                key={item.label}
+                onClick={() => setActivePage(item.label)}
+                className={`mb-1 w-full rounded px-3 py-2 text-left text-sm ${
+                  activePage === item.label
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
         </aside>
         <main className="min-w-0 flex-1">
-          <header className="flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
-            <div><h1 className="font-semibold">{activePage}</h1><p className="text-xs text-slate-500">PamirNet ISP operations</p></div>
-            <div className="flex items-center gap-3 text-sm"><span className="hidden text-slate-500 sm:inline">{me.email}</span><button className="rounded border border-slate-300 px-3 py-1.5" onClick={onLogout}>Sign out</button></div>
+          <header className="border-b border-slate-200 bg-white px-5 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h1 className="font-semibold">{activePage}</h1>
+                <p className="text-xs text-slate-500">PamirNet ISP operations</p>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <span className="hidden text-slate-500 sm:inline">{me.email}</span>
+                <button className="rounded border border-slate-300 px-3 py-1.5" onClick={onLogout}>
+                  Sign out
+                </button>
+              </div>
+            </div>
+            <select
+              className="input mt-3 md:hidden"
+              value={activePage}
+              onChange={(event) => setActivePage(event.target.value)}
+            >
+              {navigation.map((item) => (
+                <option key={item.label} value={item.label}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
           </header>
           <section className="p-5">
             {activePage === "Dashboard" && <DashboardPage access={access} />}
-            {activePage === "Networking" && <NetworkingPage access={access} canManage={permitted("router.manage")} />}
-            {activePage === "Sessions" && <SessionsPage access={access} canControl={permitted("session.disconnect")} />}
-            {activePage === "Packages" && <PackagesPage access={access} canManage={permitted("package.manage")} />}
-            {activePage === "Subscribers" && <SubscribersPage access={access} canCreate={permitted("subscriber.create")} canEdit={permitted("subscriber.edit")} />}
-            {activePage === "Vouchers" && <VouchersPage access={access} canGenerate={permitted("voucher.generate")} canExport={permitted("voucher.export")} canDisable={permitted("voucher.disable")} />}
+            {activePage === "Networking" && (
+              <NetworkingPage access={access} canManage={permitted("router.manage")} />
+            )}
+            {activePage === "Sessions" && (
+              <SessionsPage access={access} canControl={permitted("session.disconnect")} />
+            )}
+            {activePage === "Packages" && (
+              <PackagesPage access={access} canManage={permitted("package.manage")} />
+            )}
+            {activePage === "Subscribers" && (
+              <SubscribersPage
+                access={access}
+                canCreate={permitted("subscriber.create")}
+                canEdit={permitted("subscriber.edit")}
+              />
+            )}
+            {activePage === "Vouchers" && (
+              <VouchersPage
+                access={access}
+                canGenerate={permitted("voucher.generate")}
+                canExport={permitted("voucher.export")}
+                canDisable={permitted("voucher.disable")}
+              />
+            )}
             {activePage === "Analytics" && <AnalyticsPage access={access} />}
-            {!['Dashboard', 'Networking', 'Sessions', 'Packages', 'Subscribers', 'Vouchers', 'Analytics'].includes(activePage) && <Placeholder page={activePage} />}
+            {activePage === "Users & Roles" && (
+              <UsersRolesPage
+                access={access}
+                canManageUsers={permitted("user.manage")}
+                canManageRoles={permitted("role.manage")}
+              />
+            )}
+            {activePage === "Audit" && <AuditPage access={access} />}
+            {activePage === "Settings" && (
+              <SettingsPage access={access} canManage={permitted("settings.manage")} />
+            )}
           </section>
         </main>
       </div>
@@ -162,20 +358,19 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
   );
 }
 
-function Placeholder({ page }: { page: string }) {
-  return <div className="rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">{page}</h2><p className="mt-2 text-sm text-slate-500">This operational module is scheduled for a later PamirNet phase.</p></div>;
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="mb-4 block">
+      <span className="mb-1 block text-sm font-medium">{label}</span>
+      {children}
+    </label>
+  );
 }
 
-function PlatformHome({ access, me, onAccessChanged, onLogout }: { access: string; me: Me; onAccessChanged: (access: string) => Promise<void>; onLogout: () => Promise<void> }) {
-  const [tenants, setTenants] = useState<TenantSummary[]>([]);
-  const [error, setError] = useState("");
-  useEffect(() => { request<TenantSummary[]>("/platform/tenants/", {}, access).then(setTenants).catch(() => setError("Unable to load tenants.")); }, [access]);
-  async function impersonate(tenant: TenantSummary) {
-    const result = await request<{ access: string }>(`/platform/tenants/${tenant.id}/impersonate/`, { method: "POST", body: JSON.stringify({ reason: "Support session" }) }, access);
-    await onAccessChanged(result.access);
-  }
-  return <main className="min-h-screen bg-slate-100 text-slate-900"><header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4"><div><div className="font-bold">PamirNet Platform</div><div className="text-xs text-slate-500">{me.email}</div></div><button className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={onLogout}>Sign out</button></header><section className="mx-auto max-w-6xl p-6"><div className="mb-4 flex items-center justify-between"><h1 className="text-xl font-semibold">Tenants</h1><span className="text-sm text-slate-500">{tenants.length} total</span></div>{error && <p className="mb-4 text-sm text-red-700">{error}</p>}<div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">ISP</th><th>Status</th><th>Currency</th><th className="px-4 text-right">Action</th></tr></thead><tbody>{tenants.map((tenant) => <tr key={tenant.id} className="border-t border-slate-100"><td className="px-4 py-3"><div className="font-medium">{tenant.name}</div><div className="text-xs text-slate-500">{tenant.slug}</div></td><td>{tenant.status}</td><td>{tenant.currency}</td><td className="px-4 text-right"><button className="rounded border border-slate-300 px-3 py-1.5 disabled:opacity-50" disabled={tenant.status !== "active"} onClick={() => impersonate(tenant)}>Impersonate</button></td></tr>)}</tbody></table></div></section></main>;
+function CenteredMessage({ text }: { text: string }) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-500">
+      {text}
+    </main>
+  );
 }
-
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="mb-4 block"><span className="mb-1 block text-sm font-medium">{label}</span>{children}</label>; }
-function CenteredMessage({ text }: { text: string }) { return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-500">{text}</main>; }
