@@ -76,17 +76,19 @@ Status: complete
 
 ## Phase 6 — Accounting and analytics
 
+Status: complete
+
 - RADIUS Start/Interim/Stop ingestion
 - online session state
 - CoA/disconnect and immediate policy changes
 - subscriber/voucher usage counter updates
-- raw session retention
+- 12-month raw accounting retention
 - hourly/daily aggregates
 - tenant dashboard
 - per subscriber/voucher usage
 - custom-range analytics
 - sorting/filtering
-- router latency/uptime/packet loss expansion
+- router latency/uptime/packet loss history
 
 ## Phase 7 — Production hardening and AWKH rollout
 
