@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 
+import { AnalyticsPage } from "./AnalyticsPage";
 import { request } from "./api";
 import type { Me, TenantSummary } from "./api";
+import { DashboardPage } from "./DashboardPage";
 import { NetworkingPage } from "./NetworkingPage";
 import { PackagesPage } from "./PackagesPage";
+import { SessionsPage } from "./SessionsPage";
 import { SubscribersPage } from "./SubscribersPage";
 import { VouchersPage } from "./VouchersPage";
 
@@ -126,7 +129,7 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
     return <PlatformHome access={access} me={me} onAccessChanged={onAccessChanged} onLogout={onLogout} />;
   }
 
-  const navigation = ["Dashboard", "Networking", "Subscribers", "Packages", "Vouchers", "Analytics", "Users & Roles", "Audit", "Settings"];
+  const navigation = ["Dashboard", "Networking", "Sessions", "Subscribers", "Packages", "Vouchers", "Analytics", "Users & Roles", "Audit", "Settings"];
   const [activePage, setActivePage] = useState("Dashboard");
   const permitted = (code: string) => me.permissions.includes("*") || me.permissions.includes(code);
 
@@ -144,21 +147,19 @@ function AppShell({ access, me, onAccessChanged, onExitImpersonation, onLogout }
             <div className="flex items-center gap-3 text-sm"><span className="hidden text-slate-500 sm:inline">{me.email}</span><button className="rounded border border-slate-300 px-3 py-1.5" onClick={onLogout}>Sign out</button></div>
           </header>
           <section className="p-5">
-            {activePage === "Dashboard" && <Dashboard me={me} />}
+            {activePage === "Dashboard" && <DashboardPage access={access} />}
             {activePage === "Networking" && <NetworkingPage access={access} canManage={permitted("router.manage")} />}
+            {activePage === "Sessions" && <SessionsPage access={access} canControl={permitted("session.disconnect")} />}
             {activePage === "Packages" && <PackagesPage access={access} canManage={permitted("package.manage")} />}
             {activePage === "Subscribers" && <SubscribersPage access={access} canCreate={permitted("subscriber.create")} canEdit={permitted("subscriber.edit")} />}
             {activePage === "Vouchers" && <VouchersPage access={access} canGenerate={permitted("voucher.generate")} canExport={permitted("voucher.export")} canDisable={permitted("voucher.disable")} />}
-            {!['Dashboard', 'Networking', 'Packages', 'Subscribers', 'Vouchers'].includes(activePage) && <Placeholder page={activePage} />}
+            {activePage === "Analytics" && <AnalyticsPage access={access} />}
+            {!['Dashboard', 'Networking', 'Sessions', 'Packages', 'Subscribers', 'Vouchers', 'Analytics'].includes(activePage) && <Placeholder page={activePage} />}
           </section>
         </main>
       </div>
     </div>
   );
-}
-
-function Dashboard({ me }: { me: Me }) {
-  return <><div className="grid gap-4 md:grid-cols-3"><InfoCard label="Tenant" value={me.tenant?.name || "—"} /><InfoCard label="Role access" value={`${me.permissions.length} permissions`} /><InfoCard label="AAA" value="Phase 5 active" /></div><div className="mt-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="font-semibold">PamirNet control plane</h2><p className="mt-2 text-sm text-slate-600">MikroTik networking, subscriber AAA, package FUP policies and numeric voucher batches are active.</p></div></>;
 }
 
 function Placeholder({ page }: { page: string }) {
@@ -177,5 +178,4 @@ function PlatformHome({ access, me, onAccessChanged, onLogout }: { access: strin
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="mb-4 block"><span className="mb-1 block text-sm font-medium">{label}</span>{children}</label>; }
-function InfoCard({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="text-xs uppercase tracking-wide text-slate-500">{label}</div><div className="mt-1 font-semibold">{value}</div></div>; }
 function CenteredMessage({ text }: { text: string }) { return <main className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-500">{text}</main>; }

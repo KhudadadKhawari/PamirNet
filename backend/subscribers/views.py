@@ -52,6 +52,18 @@ def _validation_response(exc):
     return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
 
 
+def _disconnect_live_subscriber_sessions(subscriber):
+    from accounting.control import disconnect_subscriber_sessions
+
+    disconnect_subscriber_sessions(subscriber)
+
+
+def _refresh_live_package_sessions(package):
+    from accounting.control import refresh_package_sessions
+
+    refresh_package_sessions(package)
+
+
 class PackageViewSet(viewsets.ModelViewSet):
     serializer_class = PackageSerializer
     permission_classes = [TenantScopedPermission]
@@ -92,6 +104,7 @@ class PackageViewSet(viewsets.ModelViewSet):
             before=before,
             after=PackageSerializer(package).data,
         )
+        _refresh_live_package_sessions(package)
         return response
 
     def destroy(self, request, *args, **kwargs):
@@ -192,6 +205,11 @@ class SubscriberViewSet(viewsets.GenericViewSet):
             before=before,
             after=SubscriberSerializer(subscriber).data,
         )
+        if subscriber.status not in {
+            Subscriber.Status.ACTIVE,
+            Subscriber.Status.QUOTA_EXHAUSTED,
+        }:
+            _disconnect_live_subscriber_sessions(subscriber)
         return Response(SubscriberSerializer(subscriber).data)
 
     @action(
@@ -256,6 +274,7 @@ class SubscriberViewSet(viewsets.GenericViewSet):
                 "package_id": str(package.id),
             },
         )
+        _disconnect_live_subscriber_sessions(subscriber)
         return Response(SubscriberSerializer(self.get_queryset().get(pk=subscriber.pk)).data)
 
     @action(
@@ -283,6 +302,7 @@ class SubscriberViewSet(viewsets.GenericViewSet):
             target=subscriber,
             metadata={"subscription_id": str(subscription.id)},
         )
+        _disconnect_live_subscriber_sessions(subscriber)
         return Response(SubscriberSerializer(self.get_queryset().get(pk=subscriber.pk)).data)
 
     @action(

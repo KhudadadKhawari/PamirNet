@@ -86,3 +86,32 @@ class Router(models.Model):
         from .crypto import decrypt_secret
 
         return decrypt_secret(self.radius_secret_cipher)
+
+
+class RouterHealthSample(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="router_health_samples",
+    )
+    router = models.ForeignKey(
+        Router,
+        on_delete=models.CASCADE,
+        related_name="health_samples",
+    )
+    sampled_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=16, choices=Router.Status.choices)
+    latency_ms = models.FloatField(blank=True, null=True)
+    packet_loss_percent = models.FloatField(blank=True, null=True)
+    uptime_seconds = models.BigIntegerField(blank=True, null=True)
+
+    class Meta:
+        ordering = ["-sampled_at"]
+        indexes = [
+            models.Index(fields=["tenant", "-sampled_at"]),
+            models.Index(fields=["router", "-sampled_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.router.name}: {self.status} @ {self.sampled_at}"

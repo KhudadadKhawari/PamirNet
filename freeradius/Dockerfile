@@ -18,6 +18,8 @@ RUN chmod +x /usr/local/bin/start-freeradius.sh /usr/local/bin/watch-clients.sh 
         /etc/freeradius/3.0/mods-enabled/pamirnet_rest \
     && sed -i '/^[[:space:]]*authorize[[:space:]]*{/a\        pamirnet_rest' \
         /etc/freeradius/3.0/sites-enabled/default \
+    && sed -i '/^[[:space:]]*accounting[[:space:]]*{/a\        pamirnet_rest' \
+        /etc/freeradius/3.0/sites-enabled/default \
     && sed -i '/^[[:space:]]*post-auth[[:space:]]*{/a\        pamirnet_rest' \
         /etc/freeradius/3.0/sites-enabled/default \
     && mkdir -p /etc/freeradius/3.0/clients.d/pamirnet \

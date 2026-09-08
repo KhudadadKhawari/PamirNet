@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.db import IntegrityError
+from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,7 +10,7 @@ from core.context import resolve_tenant_context
 from core.permissions import TenantScopedPermission
 from core.services import audit
 
-from .models import Router
+from .models import Router, RouterHealthSample
 from .serializers import RouterCreateSerializer, RouterSerializer, RouterUpdateSerializer
 from .services import (
     check_router_health,
@@ -135,6 +138,31 @@ class RouterViewSet(viewsets.ModelViewSet):
             "test_error": result.get("error", "")
         }
         return Response(payload)
+
+    @action(detail=True, methods=["get"], url_path="health-history")
+    def health_history(self, request, pk=None):
+        router = self.get_object()
+        try:
+            hours = int(request.query_params.get("hours", "24"))
+        except ValueError:
+            hours = 24
+        hours = min(720, max(1, hours))
+        samples = RouterHealthSample.objects.filter(
+            router=router,
+            sampled_at__gte=timezone.now() - timedelta(hours=hours),
+        ).order_by("sampled_at")
+        return Response(
+            [
+                {
+                    "sampled_at": sample.sampled_at,
+                    "status": sample.status,
+                    "latency_ms": sample.latency_ms,
+                    "packet_loss_percent": sample.packet_loss_percent,
+                    "uptime_seconds": sample.uptime_seconds,
+                }
+                for sample in samples
+            ]
+        )
 
     @action(detail=True, methods=["post"], url_path="rotate-radius-secret")
     def rotate_radius(self, request, pk=None):
