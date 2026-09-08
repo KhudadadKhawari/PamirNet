@@ -47,6 +47,16 @@ def serialize_membership(membership):
     }
 
 
+def serialize_user(user):
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.get_full_name() or user.email,
+        "is_active": user.is_active,
+        "is_platform_admin": user.is_superuser,
+    }
+
+
 def _json_safe(value):
     if value in (None, ""):
         return {}
@@ -127,6 +137,7 @@ def ensure_owner_change_is_safe(membership, *, new_roles=None, deactivate=False)
             tenant=membership.tenant,
             is_active=True,
             roles__is_owner=True,
+            user__is_active=True,
         )
         .exclude(pk=membership.pk)
         .exists()
@@ -135,20 +146,62 @@ def ensure_owner_change_is_safe(membership, *, new_roles=None, deactivate=False)
         raise ValidationError("A tenant must always have at least one active Owner.")
 
 
+def ensure_user_deactivation_is_safe(user):
+    owner_memberships = (
+        TenantMembership.objects.filter(
+            user=user,
+            is_active=True,
+            roles__is_owner=True,
+            tenant__status=Tenant.Status.ACTIVE,
+        )
+        .select_related("tenant")
+        .distinct()
+    )
+    for membership in owner_memberships:
+        other_owner_exists = (
+            TenantMembership.objects.filter(
+                tenant=membership.tenant,
+                is_active=True,
+                roles__is_owner=True,
+                user__is_active=True,
+            )
+            .exclude(user=user)
+            .exists()
+        )
+        if not other_owner_exists:
+            raise ValidationError(
+                f"{membership.tenant.name} must always have at least one active Owner."
+            )
+
+
+def find_unique_user_by_email(email):
+    matches = list(User.objects.filter(email__iexact=email.strip().lower())[:2])
+    if len(matches) > 1:
+        raise ValidationError(
+            "Multiple users share this email; resolve the duplicate accounts first."
+        )
+    return matches[0] if matches else None
+
+
 @transaction.atomic
 def create_tenant_with_owner(
     *,
     name,
     slug,
     owner_email,
-    owner_name,
-    owner_password,
+    owner_name="",
+    owner_password="",
     timezone_name,
     currency,
 ):
     email = owner_email.strip().lower()
-    if User.objects.filter(email__iexact=email).exists():
-        raise ValidationError("A user with this email already exists.")
+    user = find_unique_user_by_email(email)
+    if user and user.is_superuser:
+        raise ValidationError("Platform administrator accounts cannot be tenant members.")
+    if user and not user.is_active:
+        raise ValidationError("The selected owner account is disabled.")
+    if not user and (not owner_name.strip() or not owner_password):
+        raise ValidationError("Owner name and password are required when creating a new user.")
 
     tenant = Tenant.objects.create(
         name=name,
@@ -156,12 +209,14 @@ def create_tenant_with_owner(
         timezone=timezone_name,
         currency=currency.upper(),
     )
-    user = User.objects.create_user(
-        username=email,
-        email=email,
-        password=owner_password,
-        first_name=owner_name.strip(),
-    )
+    if not user:
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            password=owner_password,
+            first_name=owner_name.strip(),
+        )
+
     owner_role = Role.objects.create(tenant=tenant, name="Owner", is_system=True, is_owner=True)
     owner_role.permissions.set(PamirPermission.objects.all())
     membership = TenantMembership.objects.create(tenant=tenant, user=user)
