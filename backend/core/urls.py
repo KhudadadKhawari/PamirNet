@@ -2,7 +2,12 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views_auth import LoginView, LogoutView, MeView, RefreshView
-from .views_platform import PlatformAuditViewSet, PlatformTenantViewSet, StopImpersonationView
+from .views_platform import (
+    PlatformAuditViewSet,
+    PlatformTenantViewSet,
+    PlatformUserViewSet,
+    StopImpersonationView,
+)
 from .views_tenant import (
     AuditLogViewSet,
     PermissionViewSet,
@@ -19,6 +24,7 @@ router.register("audit", AuditLogViewSet, basename="audit")
 
 platform_router = DefaultRouter()
 platform_router.register("tenants", PlatformTenantViewSet, basename="platform-tenant")
+platform_router.register("users", PlatformUserViewSet, basename="platform-user")
 platform_router.register("audit", PlatformAuditViewSet, basename="platform-audit")
 
 urlpatterns = [
