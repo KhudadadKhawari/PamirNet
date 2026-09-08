@@ -19,6 +19,7 @@ MODE="${2:-}"
 
 # shellcheck disable=SC1090
 set -a; source "$ENV_FILE"; set +a
+: "${PAMIRNET_DOMAIN:?PAMIRNET_DOMAIN is required}"
 
 [[ "$POSTGRES_DB" =~ ^[A-Za-z0-9_]+$ ]] || { echo "Unsafe POSTGRES_DB value" >&2; exit 1; }
 [[ "$POSTGRES_USER" =~ ^[A-Za-z0-9_]+$ ]] || { echo "Unsafe POSTGRES_USER value" >&2; exit 1; }
@@ -79,7 +80,7 @@ SQL
 "${COMPOSE[@]}" up -d
 
 for _ in {1..30}; do
-  if curl -fsS -H 'X-Forwarded-Proto: https' "http://127.0.0.1:${BACKEND_PORT:-8000}/api/ready/" >/dev/null; then
+  if curl -fsS -H "Host: $PAMIRNET_DOMAIN" -H 'X-Forwarded-Proto: https' "http://127.0.0.1:${BACKEND_PORT:-8000}/api/ready/" >/dev/null; then
     echo "Restore completed successfully."
     exit 0
   fi
