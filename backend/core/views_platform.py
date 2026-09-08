@@ -26,6 +26,7 @@ from .services import (
     create_tenant_with_owner,
     end_impersonation,
     ensure_owner_change_is_safe,
+    ensure_tenant_admin_role,
     ensure_user_deactivation_is_safe,
     serialize_membership,
     serialize_tenant,
@@ -199,22 +200,19 @@ class PlatformUserViewSet(viewsets.GenericViewSet):
             return Response({"detail": "User not found."}, status=404)
         serializer = PlatformUserTenantSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        tenant = Tenant.objects.filter(id=serializer.validated_data["tenant_id"]).first()
+        tenant = Tenant.objects.filter(
+            id=serializer.validated_data["tenant_id"],
+            status=Tenant.Status.ACTIVE,
+        ).first()
         if not tenant:
-            return Response({"detail": "Tenant not found."}, status=404)
-        role_ids = serializer.validated_data["role_ids"]
-        roles = list(Role.objects.filter(tenant=tenant, id__in=role_ids))
-        if len(roles) != len(set(role_ids)):
-            return Response(
-                {"detail": "One or more roles are invalid for this tenant."},
-                status=400,
-            )
+            return Response({"detail": "Active tenant not found."}, status=404)
 
+        tenant_admin_role = ensure_tenant_admin_role(tenant)
         membership, _ = TenantMembership.objects.get_or_create(tenant=tenant, user=user)
         before = serialize_membership(membership)
         membership.is_active = True
         membership.save(update_fields=["is_active", "updated_at"])
-        membership.roles.set(roles)
+        membership.roles.set([tenant_admin_role])
         membership.refresh_from_db()
         audit(
             request,
@@ -223,6 +221,7 @@ class PlatformUserViewSet(viewsets.GenericViewSet):
             target=membership,
             before=before,
             after=serialize_membership(membership),
+            metadata={"role": tenant_admin_role.name},
         )
         return Response(PlatformUserSerializer(user).data)
 
