@@ -9,6 +9,9 @@ from django.utils import timezone
 from .models import AuditLog, ImpersonationSession, PamirPermission, Role, Tenant, TenantMembership
 
 
+TENANT_ADMIN_ROLE_NAME = "Tenant Admin"
+
+
 def client_ip(request):
     forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
     if forwarded:
@@ -121,6 +124,25 @@ def membership_is_owner(membership):
     return bool(membership and membership.roles.filter(is_owner=True).exists())
 
 
+def ensure_tenant_admin_role(tenant):
+    role, _ = Role.objects.get_or_create(
+        tenant=tenant,
+        name=TENANT_ADMIN_ROLE_NAME,
+        defaults={"is_system": True, "is_owner": False},
+    )
+    changed_fields = []
+    if not role.is_system:
+        role.is_system = True
+        changed_fields.append("is_system")
+    if role.is_owner:
+        role.is_owner = False
+        changed_fields.append("is_owner")
+    if changed_fields:
+        role.save(update_fields=[*changed_fields, "updated_at"])
+    role.permissions.set(PamirPermission.objects.all())
+    return role
+
+
 def ensure_owner_change_is_safe(membership, *, new_roles=None, deactivate=False):
     if not membership_is_owner(membership):
         return
@@ -219,6 +241,7 @@ def create_tenant_with_owner(
 
     owner_role = Role.objects.create(tenant=tenant, name="Owner", is_system=True, is_owner=True)
     owner_role.permissions.set(PamirPermission.objects.all())
+    ensure_tenant_admin_role(tenant)
     membership = TenantMembership.objects.create(tenant=tenant, user=user)
     membership.roles.add(owner_role)
     return tenant, user, membership
