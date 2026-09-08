@@ -4,21 +4,11 @@ PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroT
 
 ## Current status
 
-**Phase 0 complete:** project foundation, Django/DRF, React/TypeScript, PostgreSQL, Redis/Celery, Docker Compose, OpenAPI and CI.
+**Phases 0–6 complete:** foundation, tenancy/RBAC, MikroTik/WireGuard/FreeRADIUS integration, subscribers, packages/FUP, vouchers, RADIUS accounting, live sessions, CoA/disconnect, analytics and router health history.
 
-**Phase 1 complete:** JWT authentication, isolated tenants, Owner bootstrap, custom RBAC, platform administration, audited impersonation and append-only audit logs.
+**Phase 7 implementation complete:** hardened production Compose stack, Gunicorn/static production images, Nginx/TLS template, production preflight checks, readiness probes, backup/restore tooling, load-test harness, subscriber CSV migration tooling and AWKH rollout/rollback runbooks.
 
-**Phase 2 complete:** MikroTik router registry, WireGuard provisioning, encrypted NAS/API credentials, RouterOS API/REST control, central FreeRADIUS clients and router health monitoring.
-
-**Phase 3 complete:** packages, subscribers, encrypted RADIUS credentials, subscriptions, renewals, expiry, MAC locking and tenant-aware FreeRADIUS authorization.
-
-**Phase 4 complete:** daily/weekly/monthly/subscription quotas, multi-stage FUP, effective-policy calculation and RADIUS throttle/block enforcement.
-
-**Phase 5 complete:** voucher batches, 8-digit/6-digit numeric credentials, first-login activation, simultaneous-session rules, quota/expiry enforcement, CSV export and bulk disable.
-
-**Phase 6 complete:** RADIUS Start/Interim/Stop accounting, live subscriber/voucher sessions, 64-bit usage ingestion, hourly/daily aggregates, CoA/disconnect controls, live FUP enforcement, tenant dashboard, custom-range analytics and router health history.
-
-PamirNet Edge remains a future component. The current architecture uses a central VPS for FreeRADIUS and management, with MikroTik routers connected over WireGuard.
+The actual AWKH live cutover is an operational maintenance action requiring access to the production VPS and MikroTik. PamirNet Edge remains a future component; v1 AAA is centralized on the VPS.
 
 ## Stack
 
@@ -28,14 +18,12 @@ PamirNet Edge remains a future component. The current architecture uses a centra
 - Async: Celery + Celery Beat
 - AAA: FreeRADIUS + `rlm_rest`
 - Network control: WireGuard + MikroTik RouterOS API/REST + RADIUS CoA
-- Deployment: Docker Compose
+- Deployment: Docker Compose + Nginx
 
 ## Development
 
 ```bash
 cp .env.example .env
-# Configure WIREGUARD_SERVER_PUBLIC_KEY, WIREGUARD_ENDPOINT,
-# PAMIRNET_ENCRYPTION_KEY and RADIUS_INTERNAL_TOKEN.
 docker compose up --build
 ```
 
@@ -43,9 +31,24 @@ docker compose up --build
 - API: `http://localhost:8000/api/`
 - Swagger: `http://localhost:8000/api/docs/`
 
-See the `docs/` directory for phase-specific architecture and implementation notes.
+## Production
+
+```bash
+cp .env.production.example .env.production
+chmod 600 .env.production
+# Configure production domain, secrets and WireGuard values.
+bash scripts/deploy-production.sh
+```
+
+Production documentation:
+
+- `docs/production-deployment.md`
+- `docs/security-hardening.md`
+- `docs/backup-restore.md`
+- `docs/operations-runbook.md`
+- `docs/load-testing.md`
+- `docs/awkh-rollout.md`
 
 ## Roadmap
 
-- Phase 7: production hardening and AWKH rollout
-- Future: PamirNet Edge for local/offline AAA and store-and-forward synchronization
+The centralized v1 platform is feature-complete through Phase 7 implementation. The next architectural milestone is **PamirNet Edge** for local/offline AAA, policy caching and store-and-forward synchronization.
