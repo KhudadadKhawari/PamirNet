@@ -8,6 +8,9 @@ type UsagePoint = {
   output_bytes: number;
   total_bytes: number;
   session_seconds: number;
+  average_input_bps: number;
+  average_output_bps: number;
+  average_total_bps: number;
 };
 
 type IdentityUsage = {
@@ -19,6 +22,9 @@ type IdentityUsage = {
   output_bytes: number;
   total_bytes: number;
   session_seconds: number;
+  average_input_bps: number;
+  average_output_bps: number;
+  average_total_bps: number;
 };
 
 function formatBytes(value: number) {
@@ -30,6 +36,18 @@ function formatBytes(value: number) {
     index += 1;
   }
   return `${size.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
+}
+
+function formatBitrate(value: number) {
+  if (!value) return "0 bps";
+  const units = ["bps", "Kbps", "Mbps", "Gbps"];
+  let rate = value;
+  let index = 0;
+  while (rate >= 1000 && index < units.length - 1) {
+    rate /= 1000;
+    index += 1;
+  }
+  return `${rate.toFixed(index === 0 ? 0 : 2)} ${units[index]}`;
 }
 
 function formatDuration(seconds: number) {
@@ -44,7 +62,9 @@ function toLocalInput(value: Date) {
 }
 
 export function AnalyticsPage({ access }: { access: string }) {
-  const [start, setStart] = useState(() => toLocalInput(new Date(Date.now() - 7 * 86400000)));
+  const [start, setStart] = useState(() =>
+    toLocalInput(new Date(Date.now() - 7 * 86400000)),
+  );
   const [end, setEnd] = useState(() => toLocalInput(new Date()));
   const [granularity, setGranularity] = useState<"hour" | "day">("hour");
   const [identityType, setIdentityType] = useState("");
@@ -79,7 +99,11 @@ export function AnalyticsPage({ access }: { access: string }) {
     try {
       const [points, rows] = await Promise.all([
         request<UsagePoint[]>(`/analytics/usage/?${seriesParams.toString()}`, {}, access),
-        request<IdentityUsage[]>(`/analytics/identities/?${identityParams.toString()}`, {}, access),
+        request<IdentityUsage[]>(
+          `/analytics/identities/?${identityParams.toString()}`,
+          {},
+          access,
+        ),
       ]);
       setSeries(points);
       setIdentities(rows);
@@ -99,12 +123,14 @@ export function AnalyticsPage({ access }: { access: string }) {
           input: result.input + point.input_bytes,
           output: result.output + point.output_bytes,
           total: result.total + point.total_bytes,
+          seconds: result.seconds + point.session_seconds,
         }),
-        { input: 0, output: 0, total: 0 },
+        { input: 0, output: 0, total: 0, seconds: 0 },
       ),
     [series],
   );
 
+  const averageBitrate = totals.seconds ? (totals.total * 8) / totals.seconds : 0;
   const maxTraffic = useMemo(
     () => Math.max(1, ...series.map((point) => point.total_bytes)),
     [series],
@@ -123,22 +149,42 @@ export function AnalyticsPage({ access }: { access: string }) {
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <span className="mb-1 block font-medium">From</span>
-            <input className="input" type="datetime-local" value={start} onChange={(event) => setStart(event.target.value)} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={start}
+              onChange={(event) => setStart(event.target.value)}
+            />
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium">To</span>
-            <input className="input" type="datetime-local" value={end} onChange={(event) => setEnd(event.target.value)} />
+            <input
+              className="input"
+              type="datetime-local"
+              value={end}
+              onChange={(event) => setEnd(event.target.value)}
+            />
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium">Granularity</span>
-            <select className="input" value={granularity} onChange={(event) => setGranularity(event.target.value as "hour" | "day")}>
+            <select
+              className="input"
+              value={granularity}
+              onChange={(event) =>
+                setGranularity(event.target.value as "hour" | "day")
+              }
+            >
               <option value="hour">Hourly</option>
               <option value="day">Daily</option>
             </select>
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium">Identity</span>
-            <select className="input" value={identityType} onChange={(event) => setIdentityType(event.target.value)}>
+            <select
+              className="input"
+              value={identityType}
+              onChange={(event) => setIdentityType(event.target.value)}
+            >
               <option value="">All</option>
               <option value="subscriber">Subscribers</option>
               <option value="voucher">Vouchers</option>
@@ -146,50 +192,76 @@ export function AnalyticsPage({ access }: { access: string }) {
           </label>
           <label className="text-sm">
             <span className="mb-1 block font-medium">Sort users</span>
-            <select className="input" value={ordering} onChange={(event) => setOrdering(event.target.value)}>
+            <select
+              className="input"
+              value={ordering}
+              onChange={(event) => setOrdering(event.target.value)}
+            >
               <option value="-total_bytes">Total usage ↓</option>
               <option value="total_bytes">Total usage ↑</option>
               <option value="-output_bytes">Download ↓</option>
               <option value="-input_bytes">Upload ↓</option>
+              <option value="-average_total_bps">Average speed ↓</option>
+              <option value="-average_output_bps">Average download ↓</option>
+              <option value="-average_input_bps">Average upload ↓</option>
               <option value="-session_seconds">Session time ↓</option>
               <option value="username">Username</option>
             </select>
           </label>
-          <button className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={() => void load()}>
+          <button
+            className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+            onClick={() => void load()}
+          >
             Apply
           </button>
         </div>
         <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(1)}>24 hours</button>
-          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(7)}>7 days</button>
-          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(30)}>30 days</button>
-          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(90)}>Quarter</button>
+          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(1)}>
+            24 hours
+          </button>
+          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(7)}>
+            7 days
+          </button>
+          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(30)}>
+            30 days
+          </button>
+          <button className="rounded border border-slate-300 px-2 py-1" onClick={() => preset(90)}>
+            Quarter
+          </button>
         </div>
       </div>
 
-      {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && (
+        <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Total" value={formatBytes(totals.total)} />
         <Metric label="Download" value={formatBytes(totals.output)} />
         <Metric label="Upload" value={formatBytes(totals.input)} />
+        <Metric label="Average speed" value={formatBitrate(averageBitrate)} />
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-5">
         <h2 className="font-semibold">Traffic over time</h2>
         <div className="mt-4 flex h-48 items-end gap-1 overflow-hidden border-b border-slate-200 pb-1">
           {series.map((point) => {
-            const height = Math.max(3, Math.round((point.total_bytes / maxTraffic) * 100));
+            const height = Math.max(
+              3,
+              Math.round((point.total_bytes / maxTraffic) * 100),
+            );
             return (
               <div
                 key={point.period_start}
                 className="min-w-1 flex-1 rounded-t bg-slate-700"
                 style={{ height: `${height}%` }}
-                title={`${new Date(point.period_start).toLocaleString()} — ${formatBytes(point.total_bytes)}`}
+                title={`${new Date(point.period_start).toLocaleString()} — ${formatBytes(point.total_bytes)} — ${formatBitrate(point.average_total_bps)}`}
               />
             );
           })}
-          {series.length === 0 && <p className="self-center text-sm text-slate-500">No traffic in this range.</p>}
+          {series.length === 0 && (
+            <p className="self-center text-sm text-slate-500">No traffic in this range.</p>
+          )}
         </div>
       </div>
 
@@ -202,6 +274,7 @@ export function AnalyticsPage({ access }: { access: string }) {
               <th className="px-4 py-3">Download</th>
               <th className="px-4 py-3">Upload</th>
               <th className="px-4 py-3">Total</th>
+              <th className="px-4 py-3">Avg speed</th>
               <th className="px-4 py-3">Session time</th>
             </tr>
           </thead>
@@ -216,11 +289,21 @@ export function AnalyticsPage({ access }: { access: string }) {
                 <td className="px-4 py-3">{formatBytes(row.output_bytes)}</td>
                 <td className="px-4 py-3">{formatBytes(row.input_bytes)}</td>
                 <td className="px-4 py-3 font-medium">{formatBytes(row.total_bytes)}</td>
+                <td className="px-4 py-3">
+                  <div>{formatBitrate(row.average_total_bps)}</div>
+                  <div className="text-xs text-slate-500">
+                    ↓ {formatBitrate(row.average_output_bps)} · ↑ {formatBitrate(row.average_input_bps)}
+                  </div>
+                </td>
                 <td className="px-4 py-3">{formatDuration(row.session_seconds)}</td>
               </tr>
             ))}
             {identities.length === 0 && (
-              <tr><td className="px-4 py-8 text-center text-slate-500" colSpan={6}>No matching usage data.</td></tr>
+              <tr>
+                <td className="px-4 py-8 text-center text-slate-500" colSpan={7}>
+                  No matching usage data.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
