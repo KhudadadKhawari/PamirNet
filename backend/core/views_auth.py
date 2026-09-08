@@ -14,7 +14,7 @@ from .auth import (
     set_refresh_cookie,
 )
 from .context import resolve_tenant_context
-from .serializers import LoginSerializer
+from .serializers_login import LoginSerializer
 from .services import permission_codes_for_membership
 from .throttles import LoginRateThrottle
 
