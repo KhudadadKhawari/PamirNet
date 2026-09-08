@@ -48,6 +48,20 @@ def _tenant_midnight(tenant) -> datetime:
     return datetime.combine(local_now.date(), time.min, tzinfo=zone).astimezone(UTC)
 
 
+def _throughput_bps(byte_count: int, seconds: int) -> int:
+    if not byte_count or not seconds:
+        return 0
+    return round((byte_count * 8) / seconds)
+
+
+def _safe_limit(value: str | None, default: int = 100, maximum: int = 500) -> int:
+    try:
+        parsed = int(value or default)
+    except (TypeError, ValueError):
+        parsed = default
+    return min(maximum, max(1, parsed))
+
+
 class SessionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = RadiusSessionSerializer
     permission_classes = [TenantScopedPermission]
@@ -281,7 +295,13 @@ class UsageSeriesView(APIView):
             .order_by("period_start")
         )
         for row in rows:
-            row["total_bytes"] = (row["input_bytes"] or 0) + (row["output_bytes"] or 0)
+            input_bytes = row["input_bytes"] or 0
+            output_bytes = row["output_bytes"] or 0
+            seconds = row["session_seconds"] or 0
+            row["total_bytes"] = input_bytes + output_bytes
+            row["average_input_bps"] = _throughput_bps(input_bytes, seconds)
+            row["average_output_bps"] = _throughput_bps(output_bytes, seconds)
+            row["average_total_bps"] = _throughput_bps(input_bytes + output_bytes, seconds)
         return Response(rows)
 
 
@@ -294,6 +314,11 @@ class IdentityUsageView(APIView):
         now = timezone.now()
         start = _parse_at(request.query_params.get("start"), now - timedelta(days=7))
         end = _parse_at(request.query_params.get("end"), now)
+        if end <= start:
+            return Response(
+                {"detail": "end must be after start"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         queryset = UsageAggregate.objects.filter(
             tenant=tenant,
             granularity=UsageAggregate.Granularity.HOUR,
@@ -315,14 +340,29 @@ class IdentityUsageView(APIView):
             )
         )
         for row in rows:
-            row["total_bytes"] = (row["input_bytes"] or 0) + (row["output_bytes"] or 0)
+            input_bytes = row["input_bytes"] or 0
+            output_bytes = row["output_bytes"] or 0
+            seconds = row["session_seconds"] or 0
+            row["total_bytes"] = input_bytes + output_bytes
+            row["average_input_bps"] = _throughput_bps(input_bytes, seconds)
+            row["average_output_bps"] = _throughput_bps(output_bytes, seconds)
+            row["average_total_bps"] = _throughput_bps(input_bytes + output_bytes, seconds)
         ordering = request.query_params.get("ordering", "-total_bytes")
-        allowed = {"total_bytes", "input_bytes", "output_bytes", "session_seconds", "username"}
+        allowed = {
+            "total_bytes",
+            "input_bytes",
+            "output_bytes",
+            "session_seconds",
+            "average_input_bps",
+            "average_output_bps",
+            "average_total_bps",
+            "username",
+        }
         descending = ordering.startswith("-")
         key = ordering[1:] if descending else ordering
         if key not in allowed:
             key = "total_bytes"
             descending = True
         rows.sort(key=lambda item: item.get(key) or 0, reverse=descending)
-        limit = min(500, max(1, int(request.query_params.get("limit", "100") or 100)))
+        limit = _safe_limit(request.query_params.get("limit"))
         return Response(rows[:limit])
