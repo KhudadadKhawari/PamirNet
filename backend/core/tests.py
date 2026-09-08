@@ -39,6 +39,23 @@ class PhaseOneApiTests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         return token
 
+    def platform_login(self):
+        admin = User.objects.create_superuser(
+            username="platform@pamirnet.test",
+            email="platform@pamirnet.test",
+            password="PlatformStrong-123!",
+        )
+        self.client.credentials()
+        response = self.client.post(
+            "/api/auth/login/",
+            {"email": admin.email, "password": "PlatformStrong-123!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        token = response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        return admin, token
+
     def test_owner_bootstrap_has_all_permissions(self):
         owner_role = self.membership.roles.get(is_owner=True)
         self.assertEqual(owner_role.permissions.count(), PamirPermission.objects.count())
@@ -105,22 +122,33 @@ class PhaseOneApiTests(TestCase):
         self.assertTrue(User.objects.filter(email="operator@awkh.test").exists())
         self.assertTrue(AuditLog.objects.filter(tenant=self.tenant, action="user.created").exists())
 
-    def test_platform_admin_can_impersonate(self):
-        admin = User.objects.create_superuser(
-            username="platform@pamirnet.test",
-            email="platform@pamirnet.test",
-            password="PlatformStrong-123!",
+    def test_existing_user_can_be_assigned_to_tenant(self):
+        existing = User.objects.create_user(
+            username="shared@example.test",
+            email="shared@example.test",
+            password="SharedStrong-123!",
+            first_name="Shared User",
         )
-        self.client.credentials()
+        self.login()
+        role = Role.objects.create(tenant=self.tenant, name="Support")
+        role.permissions.set(PamirPermission.objects.filter(code="dashboard.view"))
         response = self.client.post(
-            "/api/auth/login/",
-            {"email": admin.email, "password": "PlatformStrong-123!"},
+            "/api/users/",
+            {
+                "email": existing.email,
+                "role_ids": [str(role.id)],
+            },
             format="json",
         )
-        self.assertEqual(response.status_code, 200, response.data)
-        platform_token = response.data["access"]
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {platform_token}")
+        self.assertEqual(response.status_code, 201, response.data)
+        membership = TenantMembership.objects.get(tenant=self.tenant, user=existing)
+        self.assertTrue(membership.roles.filter(id=role.id).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(tenant=self.tenant, action="user.assigned").exists()
+        )
 
+    def test_platform_admin_can_impersonate(self):
+        _, platform_token = self.platform_login()
         response = self.client.post(
             f"/api/platform/tenants/{self.tenant.id}/impersonate/",
             {"reason": "Support"},
@@ -133,6 +161,104 @@ class PhaseOneApiTests(TestCase):
         self.assertTrue(me.data["impersonating"])
         self.assertEqual(me.data["tenant"]["id"], str(self.tenant.id))
         self.assertEqual(me.data["permissions"], ["*"])
+        self.assertTrue(platform_token)
+
+    def test_platform_can_create_tenant_with_existing_owner(self):
+        existing = User.objects.create_user(
+            username="existing-owner@example.test",
+            email="existing-owner@example.test",
+            password="ExistingStrong-123!",
+            first_name="Existing Owner",
+        )
+        self.platform_login()
+        response = self.client.post(
+            "/api/platform/tenants/",
+            {
+                "name": "Second ISP",
+                "slug": "second-isp",
+                "timezone": "Asia/Dushanbe",
+                "currency": "TJS",
+                "owner_email": existing.email,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        membership = TenantMembership.objects.get(
+            tenant_id=response.data["id"],
+            user=existing,
+        )
+        self.assertTrue(membership.roles.filter(is_owner=True).exists())
+
+    def test_platform_user_create_assign_and_remove(self):
+        self.platform_login()
+        role = Role.objects.create(tenant=self.tenant, name="Operator")
+        role.permissions.set(PamirPermission.objects.filter(code="dashboard.view"))
+
+        response = self.client.post(
+            "/api/platform/users/",
+            {
+                "email": "new-user@example.test",
+                "name": "New User",
+                "password": "NewUserStrong-123!",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        user_id = response.data["id"]
+
+        roles_response = self.client.get(f"/api/platform/tenants/{self.tenant.id}/roles/")
+        self.assertEqual(roles_response.status_code, 200)
+        self.assertTrue(any(item["is_owner"] for item in roles_response.data))
+
+        response = self.client.post(
+            f"/api/platform/users/{user_id}/assign-tenant/",
+            {"tenant_id": str(self.tenant.id), "role_ids": [str(role.id)]},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        membership = TenantMembership.objects.get(user_id=user_id, tenant=self.tenant)
+        self.assertTrue(membership.is_active)
+
+        response = self.client.post(
+            f"/api/platform/users/{user_id}/remove-tenant/",
+            {"tenant_id": str(self.tenant.id)},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        membership.refresh_from_db()
+        self.assertFalse(membership.is_active)
+
+    def test_platform_can_suspend_and_reactivate_tenant(self):
+        self.platform_login()
+        response = self.client.patch(
+            f"/api/platform/tenants/{self.tenant.id}/",
+            {"status": "suspended"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], "suspended")
+        response = self.client.patch(
+            f"/api/platform/tenants/{self.tenant.id}/",
+            {"status": "active"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["status"], "active")
+
+    def test_tenant_settings_and_audit_are_functional(self):
+        self.login()
+        response = self.client.patch(
+            "/api/tenant/",
+            {"name": "AWKH Networks", "timezone": "Asia/Dushanbe", "currency": "tjs"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["currency"], "TJS")
+        audit_response = self.client.get("/api/audit/")
+        self.assertEqual(audit_response.status_code, 200)
+        self.assertTrue(
+            any(item["action"] == "tenant.settings.updated" for item in audit_response.data)
+        )
 
     def test_non_owner_with_user_manage_cannot_grant_owner(self):
         manager_role = Role.objects.create(tenant=self.tenant, name="User Manager")
