@@ -27,6 +27,7 @@ services:
   backend:
     build:
       context: ./backend
+      target: development
     command: sh -c "python manage.py migrate && python manage.py render_radius_clients && python manage.py runserver 0.0.0.0:8000"
     environment: &backend-env
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-secret-key}
@@ -60,6 +61,7 @@ services:
   celery:
     build:
       context: ./backend
+      target: development
     command: celery -A pamirnet worker -l info
     environment: *backend-env
     volumes:
@@ -74,6 +76,7 @@ services:
   celery-beat:
     build:
       context: ./backend
+      target: development
     command: celery -A pamirnet beat -l info
     environment: *backend-env
     volumes:
@@ -115,6 +118,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      target: development
     command: npm run dev -- --host 0.0.0.0
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
