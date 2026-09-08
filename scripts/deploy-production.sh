@@ -11,8 +11,9 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/docker-compose.prod
 set -a; source "$ENV_FILE"; set +a
 export PAMIRNET_BUILD_SHA="${PAMIRNET_BUILD_SHA:-$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
 
-if [[ "$(stat -c '%a' "$ENV_FILE" 2>/dev/null || echo 600)" =~ [2367][0-9][0-9]$ ]]; then
-  echo "WARNING: $ENV_FILE may be readable by group/others; use chmod 600." >&2
+mode="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || echo 600)"
+if (( (8#$mode & 077) != 0 )); then
+  echo "WARNING: $ENV_FILE is readable by group/others; use chmod 600." >&2
 fi
 
 "${COMPOSE[@]}" config -q
@@ -30,7 +31,7 @@ echo "Running production configuration checks..."
 
 if "${COMPOSE[@]}" ps --status running backend 2>/dev/null | grep -q backend; then
   echo "Taking pre-deployment backup..."
-  PAMIRNET_ENV_FILE="$ENV_FILE" "$ROOT_DIR/scripts/backup-production.sh"
+  PAMIRNET_ENV_FILE="$ENV_FILE" bash "$ROOT_DIR/scripts/backup-production.sh"
 fi
 
 echo "Starting PamirNet production stack..."
