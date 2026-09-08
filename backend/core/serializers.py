@@ -385,7 +385,6 @@ class PlatformUserUpdateSerializer(serializers.Serializer):
 
 class PlatformUserTenantSerializer(serializers.Serializer):
     tenant_id = serializers.UUIDField()
-    role_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
 
 
 class PlatformUserTenantRemoveSerializer(serializers.Serializer):
