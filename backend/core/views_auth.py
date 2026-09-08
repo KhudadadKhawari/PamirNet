@@ -2,7 +2,6 @@ from django.contrib.auth.models import User
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -17,12 +16,13 @@ from .auth import (
 from .context import resolve_tenant_context
 from .serializers import LoginSerializer
 from .services import permission_codes_for_membership
+from .throttles import LoginRateThrottle
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
-    throttle_classes = [AnonRateThrottle]
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
