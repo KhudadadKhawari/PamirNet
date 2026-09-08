@@ -29,6 +29,7 @@ from .services import (
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = PermissionSerializer
     permission_classes = [TenantScopedPermission]
+    required_permissions = {"GET": "role.manage"}
     queryset = PamirPermission.objects.all()
 
     def initial(self, request, *args, **kwargs):
@@ -40,7 +41,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     permission_classes = [TenantScopedPermission]
     required_permissions = {
-        "GET": "role.manage",
+        "GET": ("role.manage", "user.manage"),
         "POST": "role.manage",
         "PATCH": "role.manage",
         "PUT": "role.manage",
@@ -136,10 +137,11 @@ class TenantUserViewSet(viewsets.GenericViewSet):
             context={"tenant": tenant, "actor_membership": request.pamirnet_membership},
         )
         serializer.is_valid(raise_exception=True)
+        assigning_existing = serializer.context.get("existing_user") is not None
         membership = serializer.save()
         audit(
             request,
-            "user.created",
+            "user.assigned" if assigning_existing else "user.created",
             tenant=tenant,
             target=membership,
             after=serialize_membership(membership),
@@ -255,7 +257,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         tenant = resolve_tenant_context(self.request)
-        queryset = AuditLog.objects.filter(tenant=tenant).select_related("actor")
+        queryset = AuditLog.objects.filter(tenant=tenant).select_related("actor", "tenant")
         action_name = self.request.query_params.get("action")
         if action_name:
             queryset = queryset.filter(action=action_name)
