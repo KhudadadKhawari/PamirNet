@@ -100,7 +100,7 @@ function LoginScreen({
 }: {
   onAuthenticated: (access: string) => Promise<void>;
 }) {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [tenantId, setTenantId] = useState("");
   const [tenantChoices, setTenantChoices] = useState<TenantChoice[]>([]);
@@ -115,7 +115,7 @@ function LoginScreen({
       const result = await request<LoginResult>("/auth/login/", {
         method: "POST",
         body: JSON.stringify({
-          email,
+          identifier,
           password,
           ...(tenantId ? { tenant_id: tenantId } : {}),
         }),
@@ -147,12 +147,13 @@ function LoginScreen({
           </p>
           <h1 className="mt-1 text-2xl font-bold">PamirNet</h1>
         </div>
-        <Field label="Email">
+        <Field label="Username or email">
           <input
             className="input"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            type="text"
+            autoComplete="username"
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
             required
           />
         </Field>
@@ -160,6 +161,7 @@ function LoginScreen({
           <input
             className="input"
             type="password"
+            autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
