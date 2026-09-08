@@ -7,23 +7,19 @@ import {
   type AuditLog,
   type Me,
   type PlatformUser,
-  type Role,
   type TenantSummary,
 } from "./api";
 
 type PlatformTab = "tenants" | "users" | "audit";
 
-export function PlatformPage({
-  access,
-  me,
-  onAccessChanged,
-  onLogout,
-}: {
+type PlatformPageProps = {
   access: string;
   me: Me;
   onAccessChanged: (access: string) => Promise<void>;
   onLogout: () => Promise<void>;
-}) {
+};
+
+export function PlatformPage({ access, me, onAccessChanged, onLogout }: PlatformPageProps) {
   const [tab, setTab] = useState<PlatformTab>("tenants");
 
   return (
@@ -57,10 +53,7 @@ export function PlatformPage({
 
       <section className="mx-auto max-w-7xl p-6">
         {tab === "tenants" && (
-          <TenantsPanel
-            access={access}
-            onAccessChanged={onAccessChanged}
-          />
+          <TenantsPanel access={access} onAccessChanged={onAccessChanged} />
         )}
         {tab === "users" && <PlatformUsersPanel access={access} />}
         {tab === "audit" && <PlatformAuditPanel access={access} />}
@@ -128,19 +121,12 @@ function TenantsPanel({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Tenants</h1>
-          <p className="text-sm text-slate-500">Create ISPs, manage status and enter support sessions.</p>
-        </div>
-        <button
-          className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-          onClick={() => setShowCreate((value) => !value)}
-        >
-          {showCreate ? "Cancel" : "Create tenant"}
-        </button>
-      </div>
-
+      <PanelHeader
+        title="Tenants"
+        description="Create ISPs, manage status and enter support sessions."
+        actionLabel={showCreate ? "Cancel" : "Create tenant"}
+        onAction={() => setShowCreate((value) => !value)}
+      />
       {error && <ErrorBanner text={error} />}
       {showCreate && (
         <CreateTenantForm
@@ -181,7 +167,9 @@ function TenantsPanel({
                   <div className="font-medium">{tenant.name}</div>
                   <div className="text-xs text-slate-500">{tenant.slug}</div>
                 </td>
-                <td className="px-4 py-3"><StatusPill active={tenant.status === "active"} text={tenant.status} /></td>
+                <td className="px-4 py-3">
+                  <StatusPill active={tenant.status === "active"} text={tenant.status} />
+                </td>
                 <td className="px-4 py-3">{tenant.timezone}</td>
                 <td className="px-4 py-3">{tenant.currency}</td>
                 <td className="px-4 py-3">
@@ -246,7 +234,7 @@ function CreateTenantForm({ access, onCreated }: { access: string; onCreated: ()
     <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5">
       <h2 className="mb-1 font-semibold">Create tenant</h2>
       <p className="mb-4 text-sm text-slate-500">
-        If the owner email already exists, leave owner name/password blank and that account will be assigned as Owner.
+        The initial Owner is created here. Additional platform-assigned users automatically become Tenant Admins.
       </p>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <InputField label="ISP name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
@@ -302,11 +290,17 @@ function EditTenantForm({
     <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-semibold">Edit {tenant.name}</h2>
-        <button type="button" className="text-sm text-slate-500 underline" onClick={onCancel}>Cancel</button>
+        <button type="button" className="text-sm underline" onClick={onCancel}>Cancel</button>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <InputField label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
-        <label className="block text-sm font-medium">Status<select className="input mt-1" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="active">Active</option><option value="suspended">Suspended</option></select></label>
+        <label className="block text-sm font-medium">
+          Status
+          <select className="input mt-1" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </label>
         <InputField label="Timezone" value={form.timezone} onChange={(value) => setForm({ ...form, timezone: value })} required />
         <InputField label="Currency" value={form.currency} onChange={(value) => setForm({ ...form, currency: value.toUpperCase() })} required />
       </div>
@@ -370,43 +364,96 @@ function PlatformUsersPanel({ access }: { access: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Users</h1>
-          <p className="text-sm text-slate-500">Create accounts and assign the same account to one or more ISPs.</p>
-        </div>
-        <button className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={() => setShowCreate((value) => !value)}>
-          {showCreate ? "Cancel" : "Create user"}
-        </button>
-      </div>
+      <PanelHeader
+        title="Users"
+        description="Create platform-managed accounts and assign them to ISPs as Tenant Admins."
+        actionLabel={showCreate ? "Cancel" : "Create user"}
+        onAction={() => setShowCreate((value) => !value)}
+      />
       {error && <ErrorBanner text={error} />}
-      {showCreate && <CreatePlatformUserForm access={access} onCreated={async () => { setShowCreate(false); await load(); }} />}
-      {editing && <EditPlatformUserForm access={access} user={editing} onCancel={() => setEditing(null)} onSaved={async () => { setEditing(null); await load(); }} />}
-      {assigning && <AssignTenantForm access={access} user={assigning} tenants={tenants} onCancel={() => setAssigning(null)} onAssigned={async () => { setAssigning(null); await load(); }} />}
+      {showCreate && (
+        <CreatePlatformUserForm
+          access={access}
+          onCreated={async () => {
+            setShowCreate(false);
+            await load();
+          }}
+        />
+      )}
+      {editing && (
+        <EditPlatformUserForm
+          access={access}
+          user={editing}
+          onCancel={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await load();
+          }}
+        />
+      )}
+      {assigning && (
+        <AssignTenantForm
+          access={access}
+          user={assigning}
+          tenants={tenants}
+          onCancel={() => setAssigning(null)}
+          onAssigned={async () => {
+            setAssigning(null);
+            await load();
+          }}
+        />
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-[900px] text-left text-sm">
-          <thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">User</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Tenant memberships</th><th className="px-4 py-3 text-right">Actions</th></tr></thead>
+          <thead className="bg-slate-50 text-slate-500">
+            <tr>
+              <th className="px-4 py-3">User</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Tenant memberships</th>
+              <th className="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
           <tbody>
-            {users.map((user) => (
-              <tr key={user.id} className="border-t border-slate-100 align-top">
-                <td className="px-4 py-3"><div className="font-medium">{user.name}</div><div className="text-xs text-slate-500">{user.email}</div></td>
-                <td className="px-4 py-3"><StatusPill active={user.is_active} text={user.is_active ? "active" : "disabled"} /></td>
-                <td className="px-4 py-3">
-                  <div className="space-y-2">
-                    {user.memberships.filter((membership) => membership.is_active).map((membership) => (
-                      <div key={membership.id} className="flex flex-wrap items-center gap-2 rounded bg-slate-50 px-2 py-1.5">
-                        <span className="font-medium">{membership.tenant_name}</span>
-                        <span className="text-xs text-slate-500">{membership.roles.map((role) => role.name).join(", ") || "No role"}</span>
-                        <button className="ml-auto text-xs text-red-700 underline" onClick={() => void removeMembership(user, membership.tenant_id)}>Remove</button>
-                      </div>
-                    ))}
-                    {user.memberships.filter((membership) => membership.is_active).length === 0 && <span className="text-slate-400">No active memberships</span>}
-                  </div>
-                </td>
-                <td className="px-4 py-3"><div className="flex justify-end gap-2"><button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => setEditing(user)}>Edit</button><button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => setAssigning(user)}>Assign tenant</button><button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => void toggleActive(user)}>{user.is_active ? "Disable" : "Enable"}</button></div></td>
-              </tr>
-            ))}
+            {users.map((user) => {
+              const memberships = user.memberships.filter((membership) => membership.is_active);
+              return (
+                <tr key={user.id} className="border-t border-slate-100 align-top">
+                  <td className="px-4 py-3">
+                    <div className="font-medium">{user.name}</div>
+                    <div className="text-xs text-slate-500">{user.email}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusPill active={user.is_active} text={user.is_active ? "active" : "disabled"} />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-2">
+                      {memberships.map((membership) => (
+                        <div key={membership.id} className="flex flex-wrap items-center gap-2 rounded bg-slate-50 px-2 py-1.5">
+                          <span className="font-medium">{membership.tenant_name}</span>
+                          <span className="text-xs text-slate-500">
+                            {membership.roles.map((role) => role.name).join(", ") || "No role"}
+                          </span>
+                          <button className="ml-auto text-xs text-red-700 underline" onClick={() => void removeMembership(user, membership.tenant_id)}>
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                      {memberships.length === 0 && <span className="text-slate-400">No active memberships</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex justify-end gap-2">
+                      <button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => setEditing(user)}>Edit</button>
+                      <button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => setAssigning(user)}>Assign tenant</button>
+                      <button className="rounded border border-slate-300 px-3 py-1.5" onClick={() => void toggleActive(user)}>
+                        {user.is_active ? "Disable" : "Enable"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
             {users.length === 0 && <EmptyRow columns={4} text="No regular users yet." />}
           </tbody>
         </table>
@@ -422,63 +469,146 @@ function CreatePlatformUserForm({ access, onCreated }: { access: string; onCreat
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      await request<PlatformUser>("/platform/users/", { method: "POST", body: JSON.stringify(form) }, access);
+      await request<PlatformUser>(
+        "/platform/users/",
+        { method: "POST", body: JSON.stringify(form) },
+        access,
+      );
       await onCreated();
     } catch (rawError) {
       setError(apiErrorMessage(rawError, "Unable to create user."));
     }
   }
 
-  return <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5"><h2 className="mb-4 font-semibold">Create user</h2><div className="grid gap-4 md:grid-cols-3"><InputField label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required /><InputField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required /><InputField label="Password" type="password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} required /></div>{error && <p className="mt-3 text-sm text-red-700">{error}</p>}<button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Create user</button></form>;
+  return (
+    <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5">
+      <h2 className="mb-4 font-semibold">Create user</h2>
+      <div className="grid gap-4 md:grid-cols-3">
+        <InputField label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
+        <InputField label="Email" type="email" value={form.email} onChange={(value) => setForm({ ...form, email: value })} required />
+        <InputField label="Password" type="password" value={form.password} onChange={(value) => setForm({ ...form, password: value })} required />
+      </div>
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+      <button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Create user</button>
+    </form>
+  );
 }
 
-function EditPlatformUserForm({ access, user, onCancel, onSaved }: { access: string; user: PlatformUser; onCancel: () => void; onSaved: () => Promise<void> }) {
+function EditPlatformUserForm({
+  access,
+  user,
+  onCancel,
+  onSaved,
+}: {
+  access: string;
+  user: PlatformUser;
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const [name, setName] = useState(user.name);
   const [error, setError] = useState("");
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     try {
-      await request<PlatformUser>(`/platform/users/${user.id}/`, { method: "PATCH", body: JSON.stringify({ name }) }, access);
+      await request<PlatformUser>(
+        `/platform/users/${user.id}/`,
+        { method: "PATCH", body: JSON.stringify({ name }) },
+        access,
+      );
       await onSaved();
     } catch (rawError) {
       setError(apiErrorMessage(rawError, "Unable to update user."));
     }
   }
-  return <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5"><div className="mb-4 flex justify-between"><h2 className="font-semibold">Edit {user.email}</h2><button type="button" className="text-sm underline" onClick={onCancel}>Cancel</button></div><div className="max-w-md"><InputField label="Name" value={name} onChange={setName} required /></div>{error && <p className="mt-3 text-sm text-red-700">{error}</p>}<button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Save</button></form>;
+
+  return (
+    <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5">
+      <div className="mb-4 flex justify-between">
+        <h2 className="font-semibold">Edit {user.email}</h2>
+        <button type="button" className="text-sm underline" onClick={onCancel}>Cancel</button>
+      </div>
+      <div className="max-w-md"><InputField label="Name" value={name} onChange={setName} required /></div>
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+      <button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Save</button>
+    </form>
+  );
 }
 
-function AssignTenantForm({ access, user, tenants, onCancel, onAssigned }: { access: string; user: PlatformUser; tenants: TenantSummary[]; onCancel: () => void; onAssigned: () => Promise<void> }) {
-  const availableTenants = useMemo(() => tenants.filter((tenant) => tenant.status === "active"), [tenants]);
+function AssignTenantForm({
+  access,
+  user,
+  tenants,
+  onCancel,
+  onAssigned,
+}: {
+  access: string;
+  user: PlatformUser;
+  tenants: TenantSummary[];
+  onCancel: () => void;
+  onAssigned: () => Promise<void>;
+}) {
+  const availableTenants = useMemo(
+    () => tenants.filter((tenant) => tenant.status === "active"),
+    [tenants],
+  );
   const [tenantId, setTenantId] = useState(availableTenants[0]?.id || "");
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [roleIds, setRoleIds] = useState<string[]>([]);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!tenantId) {
-      setRoles([]);
-      return;
-    }
-    request<Role[]>(`/platform/tenants/${tenantId}/roles/`, {}, access)
-      .then((items) => { setRoles(items); setRoleIds([]); })
-      .catch((rawError) => setError(apiErrorMessage(rawError, "Unable to load tenant roles.")));
-  }, [access, tenantId]);
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!tenantId || roleIds.length === 0) {
-      setError("Select a tenant and at least one role.");
+    if (!tenantId) {
+      setError("Select a tenant.");
       return;
     }
+    setSubmitting(true);
+    setError("");
     try {
-      await request<PlatformUser>(`/platform/users/${user.id}/assign-tenant/`, { method: "POST", body: JSON.stringify({ tenant_id: tenantId, role_ids: roleIds }) }, access);
+      await request<PlatformUser>(
+        `/platform/users/${user.id}/assign-tenant/`,
+        { method: "POST", body: JSON.stringify({ tenant_id: tenantId }) },
+        access,
+      );
       await onAssigned();
     } catch (rawError) {
       setError(apiErrorMessage(rawError, "Unable to assign tenant."));
+    } finally {
+      setSubmitting(false);
     }
   }
 
-  return <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5"><div className="mb-4 flex justify-between"><div><h2 className="font-semibold">Assign {user.email} to tenant</h2><p className="text-sm text-slate-500">Existing inactive memberships are reactivated.</p></div><button type="button" className="text-sm underline" onClick={onCancel}>Cancel</button></div><div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium">Tenant<select className="input mt-1" value={tenantId} onChange={(event) => setTenantId(event.target.value)} required><option value="">Select tenant</option>{availableTenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></label><div><div className="mb-1 text-sm font-medium">Roles</div><div className="grid max-h-48 gap-2 overflow-y-auto rounded border border-slate-200 p-3">{roles.map((role) => <label key={role.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={roleIds.includes(role.id)} onChange={() => setRoleIds((items) => items.includes(role.id) ? items.filter((id) => id !== role.id) : [...items, role.id])} />{role.name}{role.is_owner && <span className="text-xs text-amber-700">Owner</span>}</label>)}</div></div></div>{error && <p className="mt-3 text-sm text-red-700">{error}</p>}<button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Assign tenant</button></form>;
+  return (
+    <form onSubmit={submit} className="mb-5 rounded-lg border border-slate-200 bg-white p-5">
+      <div className="mb-4 flex justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Assign {user.email} to tenant</h2>
+          <p className="text-sm text-slate-500">
+            PamirNet automatically assigns the built-in Tenant Admin role. Tenant Admins can create custom roles and manage their own team members.
+          </p>
+        </div>
+        <button type="button" className="text-sm underline" onClick={onCancel}>Cancel</button>
+      </div>
+      <div className="max-w-md">
+        <label className="block text-sm font-medium">
+          Tenant
+          <select className="input mt-1" value={tenantId} onChange={(event) => setTenantId(event.target.value)} required>
+            <option value="">Select tenant</option>
+            {availableTenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="mt-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+        Role: <span className="font-semibold">Tenant Admin</span>
+      </div>
+      {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
+      <button className="mt-4 rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={submitting}>
+        {submitting ? "Assigning…" : "Assign tenant"}
+      </button>
+    </form>
+  );
 }
 
 function PlatformAuditPanel({ access }: { access: string }) {
@@ -506,19 +636,121 @@ function PlatformAuditPanel({ access }: { access: string }) {
     void load();
   }, [access, load]);
 
-  return <div><div className="mb-4"><h1 className="text-xl font-semibold">Platform audit</h1><p className="text-sm text-slate-500">Cross-tenant administrative and sensitive action history.</p></div><div className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1fr_auto]"><label className="text-sm font-medium">Tenant<select className="input mt-1" value={tenantId} onChange={(event) => setTenantId(event.target.value)}><option value="">All tenants</option>{tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</select></label><InputField label="Exact action" value={actionName} onChange={setActionName} placeholder="platform.tenant.created" /><button className="self-end rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={() => void load()}>Apply</button></div>{error && <ErrorBanner text={error} />}<AuditTable logs={logs} showTenant /></div>;
+  return (
+    <div>
+      <div className="mb-4">
+        <h1 className="text-xl font-semibold">Platform audit</h1>
+        <p className="text-sm text-slate-500">Cross-tenant administrative and sensitive action history.</p>
+      </div>
+      <div className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 md:grid-cols-[1fr_1fr_auto]">
+        <label className="text-sm font-medium">
+          Tenant
+          <select className="input mt-1" value={tenantId} onChange={(event) => setTenantId(event.target.value)}>
+            <option value="">All tenants</option>
+            {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}
+          </select>
+        </label>
+        <InputField label="Exact action" value={actionName} onChange={setActionName} placeholder="platform.tenant.created" />
+        <button className="self-end rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={() => void load()}>Apply</button>
+      </div>
+      {error && <ErrorBanner text={error} />}
+      <AuditTable logs={logs} showTenant />
+    </div>
+  );
 }
 
 export function AuditTable({ logs, showTenant = false }: { logs: AuditLog[]; showTenant?: boolean }) {
-  return <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-4 py-3">Time</th>{showTenant && <th className="px-4 py-3">Tenant</th>}<th className="px-4 py-3">Actor</th><th className="px-4 py-3">Action</th><th className="px-4 py-3">Target</th><th className="px-4 py-3">Source IP</th></tr></thead><tbody>{logs.map((log) => <tr key={log.id} className="border-t border-slate-100"><td className="whitespace-nowrap px-4 py-3">{formatDate(log.created_at)}</td>{showTenant && <td className="px-4 py-3">{log.tenant_name || "Platform"}</td>}<td className="px-4 py-3">{log.actor_email || "System"}</td><td className="px-4 py-3 font-mono text-xs">{log.action}</td><td className="px-4 py-3">{log.target_type}{log.target_id ? ` · ${log.target_id}` : ""}</td><td className="px-4 py-3">{log.source_ip || "—"}</td></tr>)}{logs.length === 0 && <EmptyRow columns={showTenant ? 6 : 5} text="No audit entries found." />}</tbody></table></div>;
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <table className="w-full min-w-[900px] text-left text-sm">
+        <thead className="bg-slate-50 text-slate-500">
+          <tr>
+            <th className="px-4 py-3">Time</th>
+            {showTenant && <th className="px-4 py-3">Tenant</th>}
+            <th className="px-4 py-3">Actor</th>
+            <th className="px-4 py-3">Action</th>
+            <th className="px-4 py-3">Target</th>
+            <th className="px-4 py-3">Source IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log) => (
+            <tr key={log.id} className="border-t border-slate-100">
+              <td className="whitespace-nowrap px-4 py-3">{formatDate(log.created_at)}</td>
+              {showTenant && <td className="px-4 py-3">{log.tenant_name || "Platform"}</td>}
+              <td className="px-4 py-3">{log.actor_email || "System"}</td>
+              <td className="px-4 py-3 font-mono text-xs">{log.action}</td>
+              <td className="px-4 py-3">{log.target_type}{log.target_id ? ` · ${log.target_id}` : ""}</td>
+              <td className="px-4 py-3">{log.source_ip || "—"}</td>
+            </tr>
+          ))}
+          {logs.length === 0 && <EmptyRow columns={showTenant ? 6 : 5} text="No audit entries found." />}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function InputField({ label, value, onChange, type = "text", required = false, placeholder = "" }: { label: string; value: string; onChange: (value: string) => void; type?: string; required?: boolean; placeholder?: string }) {
-  return <label className="block text-sm font-medium">{label}<input className="input mt-1" type={type} value={value} placeholder={placeholder} required={required} onChange={(event) => onChange(event.target.value)} /></label>;
+function PanelHeader({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  description: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold">{title}</h1>
+        <p className="text-sm text-slate-500">{description}</p>
+      </div>
+      <button className="rounded bg-slate-900 px-4 py-2 text-sm font-semibold text-white" onClick={onAction}>
+        {actionLabel}
+      </button>
+    </div>
+  );
+}
+
+function InputField({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+  placeholder = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block text-sm font-medium">
+      {label}
+      <input
+        className="input mt-1"
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
 }
 
 function StatusPill({ active, text }: { active: boolean; text: string }) {
-  return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>{text}</span>;
+  return (
+    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${active ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}>
+      {text}
+    </span>
+  );
 }
 
 function ErrorBanner({ text }: { text: string }) {
