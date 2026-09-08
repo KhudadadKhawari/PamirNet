@@ -6,6 +6,7 @@ x-logging: &default-logging
 
 x-backend-env: &backend-env
   PAMIRNET_ENV: production
+  PAMIRNET_DOMAIN: ${PAMIRNET_DOMAIN}
   PAMIRNET_BUILD_SHA: ${PAMIRNET_BUILD_SHA:-unknown}
   PAMIRNET_LOG_LEVEL: ${PAMIRNET_LOG_LEVEL:-INFO}
   DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
@@ -86,7 +87,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/api/ready/ >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: '$${PAMIRNET_DOMAIN} -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/api/ready/ >/dev/null"]
       interval: 30s
       timeout: 5s
       retries: 5
