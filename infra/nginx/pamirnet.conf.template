@@ -1,0 +1,68 @@
+limit_req_zone $binary_remote_addr zone=pamirnet_login:10m rate=10r/m;
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __PAMIRNET_DOMAIN__;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name __PAMIRNET_DOMAIN__;
+
+    ssl_certificate /etc/letsencrypt/live/__PAMIRNET_DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__PAMIRNET_DOMAIN__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:SSL:20m;
+    ssl_session_timeout 1d;
+
+    server_tokens off;
+    client_max_body_size 10m;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "same-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+
+    location = /api/auth/login/ {
+        limit_req zone=pamirnet_login burst=10 nodelay;
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__;
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 65s;
+    }
+
+    location /admin/ {
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__;
+    }
+
+    location /static/ {
+        proxy_pass http://127.0.0.1:__BACKEND_PORT__;
+        expires 7d;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:__FRONTEND_PORT__;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 30s;
+    }
+}
