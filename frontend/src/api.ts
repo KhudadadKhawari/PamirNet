@@ -4,9 +4,71 @@ export type TenantSummary = {
   id: string;
   name: string;
   slug: string;
-  status: string;
+  status: "active" | "suspended" | string;
   timezone: string;
   currency: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type Permission = {
+  code: string;
+  name: string;
+  category: string;
+};
+
+export type Role = {
+  id: string;
+  name: string;
+  is_system: boolean;
+  is_owner: boolean;
+  permissions: Permission[];
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type TenantMembership = {
+  id: string;
+  email: string;
+  name: string;
+  is_active: boolean;
+  roles: Role[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type AuditLog = {
+  id: number;
+  tenant_id: string | null;
+  tenant_name: string | null;
+  action: string;
+  actor_email: string | null;
+  target_type: string;
+  target_id: string;
+  source_ip: string | null;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type PlatformMembership = {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  tenant_slug: string;
+  tenant_status: string;
+  is_active: boolean;
+  roles: Array<{ id: string; name: string; is_owner: boolean }>;
+};
+
+export type PlatformUser = {
+  id: number;
+  email: string;
+  name: string;
+  is_active: boolean;
+  memberships: PlatformMembership[];
+  date_joined: string;
 };
 
 export type Me = {
@@ -48,6 +110,24 @@ async function apiFetch(path: string, options: RequestInit = {}, access?: string
     throw error;
   }
   return response;
+}
+
+export function apiErrorMessage(error: unknown, fallback = "Request failed."): string {
+  const payload = (error as { payload?: unknown } | undefined)?.payload;
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+    for (const value of Object.values(record)) {
+      if (typeof value === "string") return value;
+      if (Array.isArray(value) && value.length > 0) return String(value[0]);
+      if (value && typeof value === "object") {
+        const nested = Object.values(value as Record<string, unknown>)[0];
+        if (typeof nested === "string") return nested;
+        if (Array.isArray(nested) && nested.length > 0) return String(nested[0]);
+      }
+    }
+  }
+  return fallback;
 }
 
 export async function request<T>(
