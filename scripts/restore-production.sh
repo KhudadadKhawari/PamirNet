@@ -24,6 +24,17 @@ set -a; source "$ENV_FILE"; set +a
 [[ "$POSTGRES_DB" =~ ^[A-Za-z0-9_]+$ ]] || { echo "Unsafe POSTGRES_DB value" >&2; exit 1; }
 [[ "$POSTGRES_USER" =~ ^[A-Za-z0-9_]+$ ]] || { echo "Unsafe POSTGRES_USER value" >&2; exit 1; }
 
+CHECKSUM_FILE="$BACKUP_FILE.sha256"
+if [[ -f "$CHECKSUM_FILE" ]]; then
+  echo "Verifying SHA-256 checksum..."
+  (
+    cd "$(dirname "$BACKUP_FILE")"
+    sha256sum -c "$(basename "$CHECKSUM_FILE")"
+  )
+else
+  echo "WARNING: checksum file not found; validating PostgreSQL archive only." >&2
+fi
+
 verify_archive() {
   local test_db="pamirnet_restore_check_$(date +%s)"
   echo "Validating archive structure..."
