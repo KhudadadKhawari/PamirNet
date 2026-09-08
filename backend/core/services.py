@@ -6,7 +6,14 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
 from django.utils import timezone
 
-from .models import AuditLog, ImpersonationSession, PamirPermission, Role, Tenant, TenantMembership
+from .models import (
+    AuditLog,
+    ImpersonationSession,
+    PamirPermission,
+    Role,
+    Tenant,
+    TenantMembership,
+)
 
 
 TENANT_ADMIN_ROLE_NAME = "Tenant Admin"
