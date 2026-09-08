@@ -46,6 +46,15 @@ class Command(BaseCommand):
         path = Path(options["file"])
         if not path.is_file():
             raise CommandError(f"CSV file not found: {path}")
+        if (
+            options["generate_missing_passwords"]
+            and not options["dry_run"]
+            and not options.get("generated_output")
+        ):
+            raise CommandError(
+                "--generated-output is required with --generate-missing-passwords "
+                "so generated credentials cannot be lost."
+            )
 
         try:
             tenant = Tenant.objects.get(slug=options["tenant"])
@@ -182,14 +191,8 @@ class Command(BaseCommand):
                 if options["dry_run"]:
                     transaction.set_rollback(True)
 
-        if generated:
-            output = options.get("generated_output")
-            if not output:
-                raise CommandError(
-                    "Passwords were generated but --generated-output was not provided. "
-                    "Re-run with an output path so credentials are not lost."
-                )
-            output_path = Path(output)
+        if generated and not options["dry_run"]:
+            output_path = Path(options["generated_output"])
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with output_path.open("w", newline="", encoding="utf-8") as handle:
                 writer = csv.writer(handle)
