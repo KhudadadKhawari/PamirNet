@@ -16,6 +16,8 @@ PamirNet is a multi-tenant ISP subscriber management and AAA platform for MikroT
 
 **Phase 5 complete:** voucher batches, 8-digit/6-digit numeric credentials, first-login activation, simultaneous-session rules, quota/expiry enforcement, CSV export and bulk disable.
 
+**Phase 6 complete:** RADIUS Start/Interim/Stop accounting, live subscriber/voucher sessions, 64-bit usage ingestion, hourly/daily aggregates, CoA/disconnect controls, live FUP enforcement, tenant dashboard, custom-range analytics and router health history.
+
 PamirNet Edge remains a future component. The current architecture uses a central VPS for FreeRADIUS and management, with MikroTik routers connected over WireGuard.
 
 ## Stack
@@ -25,7 +27,7 @@ PamirNet Edge remains a future component. The current architecture uses a centra
 - Data: PostgreSQL, Redis
 - Async: Celery + Celery Beat
 - AAA: FreeRADIUS + `rlm_rest`
-- Network control: WireGuard + MikroTik RouterOS API/REST
+- Network control: WireGuard + MikroTik RouterOS API/REST + RADIUS CoA
 - Deployment: Docker Compose
 
 ## Development
@@ -45,6 +47,5 @@ See the `docs/` directory for phase-specific architecture and implementation not
 
 ## Roadmap
 
-- Phase 6: RADIUS accounting, online sessions, CoA/disconnect and analytics
 - Phase 7: production hardening and AWKH rollout
 - Future: PamirNet Edge for local/offline AAA and store-and-forward synchronization
