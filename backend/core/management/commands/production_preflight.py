@@ -17,12 +17,21 @@ class Command(BaseCommand):
         if settings.DEBUG:
             errors.append("DJANGO_DEBUG must be disabled in production.")
         if len(settings.SECRET_KEY) < 32 or settings.SECRET_KEY == "dev-only-secret-key":
-            errors.append("DJANGO_SECRET_KEY must be a unique random value of at least 32 characters.")
+            errors.append(
+                "DJANGO_SECRET_KEY must be a unique random value of at least "
+                "32 characters."
+            )
         if not settings.ALLOWED_HOSTS or "*" in settings.ALLOWED_HOSTS:
-            errors.append("DJANGO_ALLOWED_HOSTS must contain explicit production hostnames and must not use '*'.")
+            errors.append(
+                "DJANGO_ALLOWED_HOSTS must contain explicit production hostnames "
+                "and must not use '*'."
+            )
         if not settings.CSRF_TRUSTED_ORIGINS:
             errors.append("CSRF_TRUSTED_ORIGINS must include the production HTTPS origin.")
-        elif any(not origin.startswith("https://") for origin in settings.CSRF_TRUSTED_ORIGINS):
+        elif any(
+            not origin.startswith("https://")
+            for origin in settings.CSRF_TRUSTED_ORIGINS
+        ):
             errors.append("All production CSRF_TRUSTED_ORIGINS entries must use https://.")
         if not settings.SECURE_SSL_REDIRECT:
             errors.append("DJANGO_SECURE_SSL_REDIRECT must be enabled.")
@@ -39,18 +48,27 @@ class Command(BaseCommand):
 
         key = settings.PAMIRNET_ENCRYPTION_KEY.strip()
         if not key:
-            errors.append("PAMIRNET_ENCRYPTION_KEY is required and must be backed up separately from the database.")
+            errors.append(
+                "PAMIRNET_ENCRYPTION_KEY is required and must be backed up "
+                "separately from the database."
+            )
         else:
             try:
                 decoded = base64.urlsafe_b64decode(key.encode())
                 if len(decoded) != 32:
                     raise ValueError
             except Exception:
-                errors.append("PAMIRNET_ENCRYPTION_KEY must be a Fernet-compatible key decoding to 32 bytes.")
+                errors.append(
+                    "PAMIRNET_ENCRYPTION_KEY must be a Fernet-compatible key "
+                    "decoding to 32 bytes."
+                )
 
         token = settings.RADIUS_INTERNAL_TOKEN.strip()
         if len(token) < 32 or token == "dev-radius-internal-token":
-            errors.append("RADIUS_INTERNAL_TOKEN must be a unique random value of at least 32 characters.")
+            errors.append(
+                "RADIUS_INTERNAL_TOKEN must be a unique random value of at least "
+                "32 characters."
+            )
 
         if not settings.WIREGUARD_SERVER_PUBLIC_KEY:
             errors.append("WIREGUARD_SERVER_PUBLIC_KEY is required.")
