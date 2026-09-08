@@ -205,7 +205,10 @@ class PlatformUserViewSet(viewsets.GenericViewSet):
         role_ids = serializer.validated_data["role_ids"]
         roles = list(Role.objects.filter(tenant=tenant, id__in=role_ids))
         if len(roles) != len(set(role_ids)):
-            return Response({"detail": "One or more roles are invalid for this tenant."}, status=400)
+            return Response(
+                {"detail": "One or more roles are invalid for this tenant."},
+                status=400,
+            )
 
         membership, _ = TenantMembership.objects.get_or_create(tenant=tenant, user=user)
         before = serialize_membership(membership)
