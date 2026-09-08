@@ -177,7 +177,9 @@ def ensure_user_deactivation_is_safe(user):
 def find_unique_user_by_email(email):
     matches = list(User.objects.filter(email__iexact=email.strip().lower())[:2])
     if len(matches) > 1:
-        raise ValidationError("Multiple users share this email; resolve the duplicate accounts first.")
+        raise ValidationError(
+            "Multiple users share this email; resolve the duplicate accounts first."
+        )
     return matches[0] if matches else None
 
 
@@ -196,6 +198,8 @@ def create_tenant_with_owner(
     user = find_unique_user_by_email(email)
     if user and user.is_superuser:
         raise ValidationError("Platform administrator accounts cannot be tenant members.")
+    if user and not user.is_active:
+        raise ValidationError("The selected owner account is disabled.")
     if not user and (not owner_name.strip() or not owner_password):
         raise ValidationError("Owner name and password are required when creating a new user.")
 
