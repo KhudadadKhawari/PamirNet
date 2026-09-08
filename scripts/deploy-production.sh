@@ -10,6 +10,7 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$ROOT_DIR/docker-compose.prod
 # shellcheck disable=SC1090
 set -a; source "$ENV_FILE"; set +a
 export PAMIRNET_BUILD_SHA="${PAMIRNET_BUILD_SHA:-$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)}"
+: "${PAMIRNET_DOMAIN:?PAMIRNET_DOMAIN is required}"
 
 mode="$(stat -c '%a' "$ENV_FILE" 2>/dev/null || echo 600)"
 if (( (8#$mode & 077) != 0 )); then
@@ -39,7 +40,7 @@ PAMIRNET_BUILD_SHA="$PAMIRNET_BUILD_SHA" "${COMPOSE[@]}" up -d --remove-orphans
 
 READY_URL="http://127.0.0.1:${BACKEND_PORT:-8000}/api/ready/"
 for _ in {1..45}; do
-  if curl -fsS -H 'X-Forwarded-Proto: https' "$READY_URL" >/dev/null; then
+  if curl -fsS -H "Host: $PAMIRNET_DOMAIN" -H 'X-Forwarded-Proto: https' "$READY_URL" >/dev/null; then
     echo "PamirNet API is ready."
     "${COMPOSE[@]}" ps
     exit 0
