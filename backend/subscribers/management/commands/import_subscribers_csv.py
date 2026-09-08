@@ -19,7 +19,10 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--tenant", required=True, help="Tenant slug")
         parser.add_argument("--file", required=True, help="CSV file path")
-        parser.add_argument("--default-package", help="Package name used when CSV package is empty")
+        parser.add_argument(
+            "--default-package",
+            help="Package name used when CSV package is empty",
+        )
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--generate-missing-passwords", action="store_true")
         parser.add_argument(
@@ -88,7 +91,9 @@ class Command(BaseCommand):
                     username = (row.get("username") or "").strip()
                     name = (row.get("name") or "").strip()
                     if not username or not name:
-                        errors.append(f"line {line_number}: username and name are required")
+                        errors.append(
+                            f"line {line_number}: username and name are required"
+                        )
                         continue
 
                     if tenant.subscriber_credentials.filter(username=username).exists():
@@ -116,11 +121,14 @@ class Command(BaseCommand):
                     password = row.get("password") or ""
                     if not password and not options["generate_missing_passwords"]:
                         errors.append(
-                            f"line {line_number}: password missing; use --generate-missing-passwords if intentional"
+                            f"line {line_number}: password missing; use "
+                            "--generate-missing-passwords if intentional"
                         )
                         continue
 
-                    status = (row.get("status") or Subscriber.Status.ACTIVE).strip().lower()
+                    status = (
+                        row.get("status") or Subscriber.Status.ACTIVE
+                    ).strip().lower()
                     if status not in Subscriber.Status.values:
                         errors.append(f"line {line_number}: invalid status: {status}")
                         continue
@@ -174,7 +182,9 @@ class Command(BaseCommand):
                                 subscription.status = Subscription.Status.EXPIRED
                                 if subscriber.status == Subscriber.Status.ACTIVE:
                                     subscriber.status = Subscriber.Status.EXPIRED
-                                    subscriber.save(update_fields=["status", "updated_at"])
+                                    subscriber.save(
+                                        update_fields=["status", "updated_at"]
+                                    )
                             subscription.save()
 
                     if generated_password:
@@ -185,7 +195,8 @@ class Command(BaseCommand):
                     for error in errors:
                         self.stderr.write(self.style.ERROR(error))
                     raise CommandError(
-                        f"Import aborted: {len(errors)} invalid row(s). No changes were committed."
+                        f"Import aborted: {len(errors)} invalid row(s). "
+                        "No changes were committed."
                     )
 
                 if options["dry_run"]:
@@ -204,6 +215,7 @@ class Command(BaseCommand):
         mode = "DRY RUN" if options["dry_run"] else "COMMITTED"
         self.stdout.write(
             self.style.SUCCESS(
-                f"{mode}: imported={imported}, skipped_existing={skipped}, tenant={tenant.slug}"
+                f"{mode}: imported={imported}, skipped_existing={skipped}, "
+                f"tenant={tenant.slug}"
             )
         )
