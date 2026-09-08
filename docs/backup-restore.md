@@ -26,11 +26,21 @@ Default path:
 /var/backups/pamirnet/
 ```
 
-Recommended schedule:
+## Automated schedule
 
-```cron
-15 */6 * * * cd /opt/PamirNet && PAMIRNET_ENV_FILE=/opt/PamirNet/.env.production bash scripts/backup-production.sh >> /var/log/pamirnet-backup.log 2>&1
+Phase 7 includes a systemd timer that runs at 00:15, 06:15, 12:15 and 18:15 UTC.
+
+If PamirNet is installed at `/opt/PamirNet`:
+
+```bash
+sudo cp infra/systemd/pamirnet-backup.service /etc/systemd/system/
+sudo cp infra/systemd/pamirnet-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now pamirnet-backup.timer
+sudo systemctl list-timers pamirnet-backup.timer
 ```
+
+If the repository lives elsewhere, edit `WorkingDirectory`, `Environment` and `ExecStart` in the service first.
 
 For production, copy backups to a second machine/object-storage location after creation. A backup stored only on the PamirNet VPS is not sufficient disaster recovery.
 
