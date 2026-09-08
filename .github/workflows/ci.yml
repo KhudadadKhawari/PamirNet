@@ -31,6 +31,21 @@ jobs:
         run: python manage.py test
       - name: Ruff
         run: ruff check .
+      - name: Production preflight settings
+        env:
+          PAMIRNET_ENV: production
+          DJANGO_DEBUG: "0"
+          DJANGO_SECRET_KEY: ci-only-secret-key-that-is-longer-than-thirty-two-characters
+          DJANGO_ALLOWED_HOSTS: pamirnet.test
+          CSRF_TRUSTED_ORIGINS: https://pamirnet.test
+          CORS_ALLOWED_ORIGINS: https://pamirnet.test
+          DATABASE_URL: postgresql://pamirnet:pamirnet@localhost:5432/pamirnet
+          REDIS_URL: redis://localhost:6379/0
+          PAMIRNET_ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+          RADIUS_INTERNAL_TOKEN: ci-radius-token-that-is-longer-than-thirty-two-characters
+          WIREGUARD_SERVER_PUBLIC_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          WIREGUARD_ENDPOINT: 203.0.113.10:51820
+        run: python manage.py production_preflight
 
   frontend:
     name: Frontend
@@ -63,3 +78,28 @@ jobs:
           -e RADIUS_INTERNAL_TOKEN=ci-radius-token
           pamirnet-freeradius
           freeradius -XC
+
+  production-images:
+    name: Production images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend production target
+        run: docker build --target production -t pamirnet-backend:ci ./backend
+      - name: Build frontend production target
+        run: docker build --target production -t pamirnet-frontend:ci ./frontend
+
+  operations:
+    name: Operations tooling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate shell syntax
+        run: bash -n scripts/*.sh
+      - name: Validate load-test syntax
+        run: python -m py_compile scripts/loadtest_radius.py
+      - name: Validate production Compose
+        run: docker compose --env-file .env.production.example -f docker-compose.prod.yml config -q

@@ -16,11 +16,13 @@ from .auth import (
 from .context import resolve_tenant_context
 from .serializers import LoginSerializer
 from .services import permission_codes_for_membership
+from .throttles import LoginRateThrottle
 
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+    throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)

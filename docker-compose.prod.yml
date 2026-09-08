@@ -1,0 +1,188 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-backend-env: &backend-env
+  PAMIRNET_ENV: production
+  PAMIRNET_DOMAIN: ${PAMIRNET_DOMAIN}
+  PAMIRNET_BUILD_SHA: ${PAMIRNET_BUILD_SHA:-unknown}
+  PAMIRNET_LOG_LEVEL: ${PAMIRNET_LOG_LEVEL:-INFO}
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+  DJANGO_DEBUG: "0"
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+  DJANGO_SECURE_SSL_REDIRECT: "1"
+  DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-31536000}
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+  REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+  CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
+  PAMIRNET_ENCRYPTION_KEY: ${PAMIRNET_ENCRYPTION_KEY}
+  WIREGUARD_CLIENT_SUBNET: ${WIREGUARD_CLIENT_SUBNET:-10.250.0.0/16}
+  WIREGUARD_SERVER_ADDRESS: ${WIREGUARD_SERVER_ADDRESS:-10.250.0.1/16}
+  WIREGUARD_SERVER_PUBLIC_KEY: ${WIREGUARD_SERVER_PUBLIC_KEY}
+  WIREGUARD_ENDPOINT: ${WIREGUARD_ENDPOINT}
+  WIREGUARD_PORT: ${WIREGUARD_PORT:-51820}
+  WIREGUARD_INTERFACE: ${WIREGUARD_INTERFACE:-wg0}
+  RADIUS_CLIENTS_FILE: /var/lib/pamirnet/freeradius/pamirnet.conf
+  RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN}
+  ACCOUNTING_RAW_RETENTION_DAYS: ${ACCOUNTING_RAW_RETENTION_DAYS:-365}
+  ROUTER_HEALTH_RETENTION_DAYS: ${ROUTER_HEALTH_RETENTION_DAYS:-30}
+  PAMIRNET_LOGIN_RATE: ${PAMIRNET_LOGIN_RATE:-20/minute}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a '$${REDIS_PASSWORD}' ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    logging: *default-logging
+
+  backend:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    command: >-
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py render_radius_clients &&
+      gunicorn pamirnet.wsgi:application --bind 0.0.0.0:8000
+      --workers ${GUNICORN_WORKERS:-3} --threads ${GUNICORN_THREADS:-2}
+      --timeout 60 --graceful-timeout 30 --access-logfile - --error-logfile -"
+    environment: *backend-env
+    volumes:
+      - radius_clients:/var/lib/pamirnet/freeradius
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -H 'Host: '$${PAMIRNET_DOMAIN} -H 'X-Forwarded-Proto: https' http://127.0.0.1:8000/api/ready/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  celery:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    command: celery -A pamirnet worker -l ${CELERY_LOG_LEVEL:-INFO} --concurrency=${CELERY_CONCURRENCY:-2}
+    environment: *backend-env
+    volumes:
+      - radius_clients:/var/lib/pamirnet/freeradius
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  celery-beat:
+    build:
+      context: ./backend
+      target: production
+    restart: unless-stopped
+    command: celery -A pamirnet beat -l ${CELERY_LOG_LEVEL:-INFO}
+    environment: *backend-env
+    volumes:
+      - radius_clients:/var/lib/pamirnet/freeradius
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  freeradius:
+    build:
+      context: ./freeradius
+    restart: unless-stopped
+    environment:
+      RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN}
+    volumes:
+      - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
+    ports:
+      - "${RADIUS_BIND_IP:-127.0.0.1}:1812:1812/udp"
+      - "${RADIUS_BIND_IP:-127.0.0.1}:1813:1813/udp"
+    depends_on:
+      backend:
+        condition: service_healthy
+    logging: *default-logging
+
+  freeradius-reloader:
+    build:
+      context: ./freeradius
+    restart: unless-stopped
+    command: /usr/local/bin/watch-clients.sh
+    pid: "service:freeradius"
+    environment:
+      RADIUS_INTERNAL_TOKEN: ${RADIUS_INTERNAL_TOKEN}
+    volumes:
+      - radius_clients:/etc/freeradius/3.0/clients.d/pamirnet
+    depends_on:
+      - freeradius
+    logging: *default-logging
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  redis_data:
+  radius_clients:

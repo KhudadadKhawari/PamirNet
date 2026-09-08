@@ -92,12 +92,23 @@ Status: complete
 
 ## Phase 7 — Production hardening and AWKH rollout
 
-- security hardening
-- backups/restore validation
-- load tests
-- operational runbooks
-- manual migration from Janitor RADIUS
-- AWKH production deployment
+Status: implementation complete
+
+- hardened production Docker Compose stack
+- Gunicorn production backend and static frontend images
+- HTTPS/Nginx reverse-proxy template
+- production configuration preflight checks
+- secure cookies/HSTS/CSRF/host hardening and login throttling
+- liveness/readiness endpoints
+- validated PostgreSQL backups and restore drills
+- automated six-hour backup timer
+- RADIUS/API load-test harness
+- operational/security/backup/deployment runbooks
+- normalized CSV migration command for Janitor subscribers
+- AWKH staged cutover and immediate rollback runbook
+- production CI validation for backend/frontend images and deployment assets
+
+The actual AWKH live cutover is an operational action requiring access to the production VPS and MikroTik. The repository-side Phase 7 implementation is complete and ready for that maintenance window.
 
 ## Future — PamirNet Edge
 

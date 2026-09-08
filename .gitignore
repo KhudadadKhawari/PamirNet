@@ -20,6 +20,7 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # IDE / OS
 .idea/
@@ -33,3 +34,8 @@ Thumbs.db
 # Docker/local data
 .postgres-data/
 .redis-data/
+
+# Backup / migration exports
+*.dump
+*.dump.sha256
+migration-output/
