@@ -36,9 +36,11 @@ if [[ ! -s "$BACKUP_FILE" ]]; then
   exit 1
 fi
 
-# Validate that PostgreSQL can parse the archive before accepting it.
 "${COMPOSE[@]}" exec -T db pg_restore --list < "$BACKUP_FILE" >/dev/null
-sha256sum "$BACKUP_FILE" > "$CHECKSUM_FILE"
+(
+  cd "$BACKUP_DIR"
+  sha256sum "$(basename "$BACKUP_FILE")" > "$(basename "$CHECKSUM_FILE")"
+)
 chmod 600 "$BACKUP_FILE" "$CHECKSUM_FILE"
 
 find "$BACKUP_DIR" -type f \( -name 'pamirnet-*.dump' -o -name 'pamirnet-*.dump.sha256' \) \
