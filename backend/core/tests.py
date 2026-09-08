@@ -59,6 +59,10 @@ class PhaseOneApiTests(TestCase):
     def test_owner_bootstrap_has_all_permissions(self):
         owner_role = self.membership.roles.get(is_owner=True)
         self.assertEqual(owner_role.permissions.count(), PamirPermission.objects.count())
+        tenant_admin_role = Role.objects.get(tenant=self.tenant, name="Tenant Admin")
+        self.assertTrue(tenant_admin_role.is_system)
+        self.assertFalse(tenant_admin_role.is_owner)
+        self.assertEqual(tenant_admin_role.permissions.count(), PamirPermission.objects.count())
 
     def test_login_and_me_returns_tenant_context(self):
         self.login()
@@ -188,12 +192,10 @@ class PhaseOneApiTests(TestCase):
             user=existing,
         )
         self.assertTrue(membership.roles.filter(is_owner=True).exists())
+        self.assertTrue(Role.objects.filter(tenant_id=response.data["id"], name="Tenant Admin").exists())
 
-    def test_platform_user_create_assign_and_remove(self):
+    def test_platform_assignment_automatically_grants_tenant_admin(self):
         self.platform_login()
-        role = Role.objects.create(tenant=self.tenant, name="Operator")
-        role.permissions.set(PamirPermission.objects.filter(code="dashboard.view"))
-
         response = self.client.post(
             "/api/platform/users/",
             {
@@ -206,21 +208,49 @@ class PhaseOneApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         user_id = response.data["id"]
 
-        roles_response = self.client.get(f"/api/platform/tenants/{self.tenant.id}/roles/")
-        self.assertEqual(roles_response.status_code, 200)
-        self.assertTrue(any(item["is_owner"] for item in roles_response.data))
-
         response = self.client.post(
             f"/api/platform/users/{user_id}/assign-tenant/",
-            {"tenant_id": str(self.tenant.id), "role_ids": [str(role.id)]},
+            {"tenant_id": str(self.tenant.id)},
             format="json",
         )
         self.assertEqual(response.status_code, 200, response.data)
         membership = TenantMembership.objects.get(user_id=user_id, tenant=self.tenant)
         self.assertTrue(membership.is_active)
+        self.assertEqual(membership.roles.count(), 1)
+        tenant_admin_role = membership.roles.get()
+        self.assertEqual(tenant_admin_role.name, "Tenant Admin")
+        self.assertTrue(tenant_admin_role.is_system)
+        self.assertEqual(tenant_admin_role.permissions.count(), PamirPermission.objects.count())
+
+        user = User.objects.get(id=user_id)
+        self.client.credentials()
+        login = self.client.post(
+            "/api/auth/login/",
+            {"email": user.email, "password": "NewUserStrong-123!"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200, login.data)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['access']}")
+        role_create = self.client.post(
+            "/api/roles/",
+            {"name": "Technician", "permission_codes": ["router.view"]},
+            format="json",
+        )
+        self.assertEqual(role_create.status_code, 201, role_create.data)
+
+    def test_platform_user_remove_tenant_membership(self):
+        self.platform_login()
+        user = User.objects.create_user(
+            username="remove-user@example.test",
+            email="remove-user@example.test",
+            password="RemoveStrong-123!",
+        )
+        tenant_admin = Role.objects.get(tenant=self.tenant, name="Tenant Admin")
+        membership = TenantMembership.objects.create(tenant=self.tenant, user=user)
+        membership.roles.add(tenant_admin)
 
         response = self.client.post(
-            f"/api/platform/users/{user_id}/remove-tenant/",
+            f"/api/platform/users/{user.id}/remove-tenant/",
             {"tenant_id": str(self.tenant.id)},
             format="json",
         )
